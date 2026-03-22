@@ -1,5 +1,5 @@
 use core::panic;
-use std::{cmp::max, f32::consts::PI, mem};
+use std::{cmp::max, f32::consts::PI, mem, os::unix::thread, sync::Arc};
 
 use eframe::egui::{Rect, Vec2, debug_text::print};
 use rayon::iter::{
@@ -18,6 +18,8 @@ pub struct FluidSim {
     pub gradient_step: f32,
     pub target_density: f32,
     pub pressure_multiplier: f32,
+    pub running: bool,
+    pub gravity: f32,
 }
 
 #[derive(Debug)]
@@ -42,28 +44,53 @@ impl Particle {
 
 impl FluidSim {
     const DAMPING: f32 = 0.7;
-    const GRAVITY: Vec2 = Vec2::new(0.0, 0.0);
     pub fn new(size: usize, bounds: Rect) -> FluidSim {
         let mut parts = Self::create_box(size, bounds);
         for p in parts.iter_mut() {
             p.property = (f32::cos(p.pos.x * 0.020 - 3.0 + f32::sin(p.pos.y * 0.02)) + 1.0) * 0.5;
         }
-        let smoothing_radius = 25.0;
+        let smoothing_radius = 40.0;
         let mut s = Self {
-            spatial_map: SpatialMap::new(bounds, smoothing_radius, parts.len()),
+            gravity: 1200.0,
+            spatial_map: SpatialMap::new(smoothing_radius, parts.len()),
             particles: parts,
             bounds,
-            particle_size: 3.0,
+            particle_size: 2.0,
             smoothing_radius: smoothing_radius,
             mass: 1.0,
             gradient_step: 0.001,
             target_density: 0.0005,
-            pressure_multiplier: 0.5,
+            pressure_multiplier: 15.0,
+            running: false,
         };
         s.update_spatial_map();
         s.update_densities();
 
         return s;
+    }
+    pub fn toggle_running(&mut self) {
+        self.running = !self.running;
+    }
+    pub fn stop(&mut self) {
+        self.running = false;
+    }
+    pub fn apply_force(&mut self, pos: Vec2, radius: f32, strength: f32) {
+        for p in self.particles.iter_mut() {
+            let offset = pos - p.pos;
+            let dst_sq = offset.length_sq();
+            if dst_sq < radius * radius {
+                let dst = dst_sq.sqrt();
+                let dir = if dst < f32::EPSILON {
+                    Vec2::ZERO
+                } else {
+                    offset / dst
+                };
+                let center_t = 1.0 - (dst / radius);
+                let force = (dir * strength - p.vel) * center_t;
+
+                p.vel += force / self.mass;
+            }
+        }
     }
     pub fn create_random(size: usize, bounds: Rect) -> Vec<Particle> {
         fastrand::seed(10);
@@ -83,7 +110,7 @@ impl FluidSim {
 
         let rect_size = f32::sqrt(size as f32).ceil() as usize;
 
-        let particle_dist = 10.0;
+        let particle_dist = 4.0;
         let center_offset = (rect_size as f32 * particle_dist) / 2.0;
         let center = bounds.center().to_vec2() - Vec2::new(center_offset, center_offset);
 
@@ -113,8 +140,7 @@ impl FluidSim {
         });
     }
     pub fn update_spatial_map(&mut self) {
-        self.spatial_map
-            .update_params(self.bounds, self.smoothing_radius);
+        self.spatial_map.update_params(self.smoothing_radius);
 
         for (index, part) in self.particles.iter().enumerate() {
             self.spatial_map.insert(index, part.predicted);
@@ -122,8 +148,11 @@ impl FluidSim {
         self.spatial_map.finalize();
     }
     pub fn update(&mut self, delta_time: f32) {
+        if !self.running {
+            return;
+        }
         for part in self.particles.iter_mut() {
-            part.vel += Self::GRAVITY * delta_time;
+            part.vel += Vec2::DOWN * self.gravity * delta_time;
 
             part.predicted = part.pos + part.vel * 1.0 / 60.0;
         }

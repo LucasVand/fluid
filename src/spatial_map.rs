@@ -3,39 +3,31 @@ use eframe::egui::{Rect, Vec2};
 pub struct SpatialMap {
     pub spacial_lookup: Vec<(usize, usize)>,
     pub start_indices: Vec<usize>,
-    pub bounds: Rect,
     pub cell_size: f32,
     pub count: usize,
 }
 
 impl SpatialMap {
-    const P1: usize = 211877;
-    const P2: usize = 3;
-    pub fn new(bounds: Rect, cell_size: f32, count: usize) -> Self {
+    const P1: isize = 211877;
+    const P2: isize = 3;
+    pub fn new(cell_size: f32, count: usize) -> Self {
         SpatialMap {
             spacial_lookup: vec![(0, 0); count],
             start_indices: vec![usize::MAX; count],
-            bounds: bounds,
             cell_size: cell_size,
             count: count,
         }
     }
-    pub fn size(&self) -> Vec2 {
-        let size = (self.bounds.size() / self.cell_size).ceil();
-        return size;
-    }
-    pub fn update_params(&mut self, bounds: Rect, cell_size: f32) {
-        self.bounds = bounds;
+    pub fn update_params(&mut self, cell_size: f32) {
         self.cell_size = cell_size;
     }
-    pub fn coords_to_key(&self, coords: (usize, usize)) -> usize {
+    pub fn coords_to_key(&self, coords: (isize, isize)) -> usize {
         let hash = Self::P1 * coords.0 + Self::P2 * coords.1;
-        return hash % self.count;
+        return hash as usize % self.count;
     }
-    fn pos_to_coords(&self, pos: Vec2) -> (usize, usize) {
-        let shifted = pos - self.bounds.min.to_vec2();
-        let c_x = (shifted.x / self.cell_size) as usize;
-        let c_y = (shifted.y / self.cell_size) as usize;
+    pub fn pos_to_coords(&self, pos: Vec2) -> (isize, isize) {
+        let c_x = (pos.x / self.cell_size) as isize;
+        let c_y = (pos.y / self.cell_size) as isize;
         return (c_x, c_y);
     }
     pub fn pos_to_key(&self, pos: Vec2) -> usize {
@@ -55,7 +47,7 @@ impl SpatialMap {
         return self.get_cords(self.pos_to_coords(pos));
     }
 
-    fn get_cords(&self, coords: (usize, usize)) -> Vec<usize> {
+    fn get_cords(&self, coords: (isize, isize)) -> Vec<usize> {
         let mut indexes = Vec::new();
 
         let key = self.coords_to_key(coords);
@@ -92,13 +84,10 @@ impl SpatialMap {
             let x: isize = coords.0 as isize + of.0;
             let y: isize = coords.1 as isize + of.1;
 
-            let new_cords: (usize, usize) = (x.max(0) as usize, y.max(0) as usize);
+            let new_cords: (isize, isize) = (x, y);
             master.append(&mut self.get_cords(new_cords));
         }
         return master;
-    }
-    pub fn get_cell_coords(&self, pos: Vec2) -> (usize, usize) {
-        return self.pos_to_coords(pos);
     }
 
     pub fn finalize(&mut self) {

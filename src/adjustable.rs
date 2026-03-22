@@ -55,7 +55,7 @@ impl<'a> Adjuster<'a> {
                 }
                 for (s, v) in drag_values.into_iter() {
                     ui.label(s);
-                    ui.add(DragValue::new(v));
+                    ui.add(DragValue::new(v).fixed_decimals(4));
                 }
             });
         });
