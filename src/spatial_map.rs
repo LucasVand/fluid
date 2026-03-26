@@ -5,29 +5,33 @@ pub struct SpatialMap {
     pub start_indices: Vec<usize>,
     pub cell_size: f32,
     pub count: usize,
+    pub bounds: Rect,
 }
 
 impl SpatialMap {
-    const P1: isize = 211877;
-    const P2: isize = 3;
-    pub fn new(cell_size: f32, count: usize) -> Self {
+    const P1: isize = 15823;
+    const P2: isize = 9739333;
+    pub fn new(bounds: Rect, cell_size: f32, count: usize) -> Self {
         SpatialMap {
             spacial_lookup: vec![(0, 0); count],
             start_indices: vec![usize::MAX; count],
             cell_size: cell_size,
             count: count,
+            bounds: bounds,
         }
     }
-    pub fn update_params(&mut self, cell_size: f32) {
+    pub fn update_params(&mut self, bounds: Rect, cell_size: f32) {
         self.cell_size = cell_size;
+        self.bounds = bounds;
     }
     pub fn coords_to_key(&self, coords: (isize, isize)) -> usize {
         let hash = Self::P1 * coords.0 + Self::P2 * coords.1;
         return hash as usize % self.count;
     }
     pub fn pos_to_coords(&self, pos: Vec2) -> (isize, isize) {
-        let c_x = (pos.x / self.cell_size) as isize;
-        let c_y = (pos.y / self.cell_size) as isize;
+        let shifted = pos - self.bounds.min.to_vec2();
+        let c_x = (shifted.x / self.cell_size) as isize;
+        let c_y = (shifted.y / self.cell_size) as isize;
         return (c_x, c_y);
     }
     pub fn pos_to_key(&self, pos: Vec2) -> usize {
@@ -78,12 +82,18 @@ impl SpatialMap {
             (0, 1),
             (1, 1),
         ];
+        let max = (
+            (self.bounds.max.x / self.cell_size).ceil() as isize,
+            (self.bounds.max.y / self.cell_size).ceil() as isize,
+        );
         let coords = self.pos_to_coords(pos);
         let mut master = Vec::new();
         for of in offsets {
             let x: isize = coords.0 as isize + of.0;
             let y: isize = coords.1 as isize + of.1;
 
+            let clamped_x = x.max(0).min(max.0);
+            let clamped_y = y.max(0).min(max.0);
             let new_cords: (isize, isize) = (x, y);
             master.append(&mut self.get_cords(new_cords));
         }

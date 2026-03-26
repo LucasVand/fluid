@@ -1,15 +1,10 @@
-use std::time::Duration;
-
 use eframe::{
     App, CreationContext,
-    egui::{
-        self, Align, Align2, CentralPanel, Color32, ColorImage, Context, CornerRadius, Image, Key,
-        Pos2, Rect, Stroke, StrokeKind, TextureHandle, TextureOptions, Vec2, load::SizedTexture,
-    },
+    egui::{self, CentralPanel, Color32, CornerRadius, Key, Pos2, Rect, Stroke, StrokeKind, Vec2},
     epaint::Hsva,
 };
 
-use crate::{adjustable::Adjuster, fluid_sim::FluidSim, spatial_map::SpatialMap};
+use crate::{adjustable::Adjuster, fluid_sim::FluidSim};
 
 pub struct FluidApp {
     pub sim: FluidSim,
@@ -27,10 +22,10 @@ impl FluidApp {
             sim: FluidSim::new(4000, initial_size),
             modifiers_open: false,
             pos: None,
-            color_muliplier: 0.0008,
+            color_muliplier: 0.005,
             color_offset: 0.63,
-            radius: 50.0,
-            strength: 100.0,
+            radius: 130.0,
+            strength: 120.0,
         }
     }
     pub fn reset(&mut self) {
@@ -41,16 +36,24 @@ impl FluidApp {
 }
 impl App for FluidApp {
     fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
-        if ctx.input(|i| i.pointer.any_down()) {
+        if ctx.input(|i| i.pointer.primary_down()) {
             self.sim.apply_force(
                 ctx.pointer_hover_pos().unwrap().to_vec2(),
                 self.radius,
                 self.strength,
             );
             self.pos = ctx.pointer_hover_pos();
+        } else if ctx.input(|i| i.pointer.secondary_clicked()) {
+            self.pos = ctx.pointer_hover_pos();
+            println!(
+                "Den: {:?}",
+                self.sim
+                    .calculate_density(ctx.pointer_hover_pos().unwrap().to_vec2())
+            );
         } else {
             self.pos = None;
         }
+
         if ctx.input(|i| i.key_pressed(Key::Space)) {
             self.sim.toggle_running();
         }
@@ -66,10 +69,15 @@ impl App for FluidApp {
             self.sim
                 .set_bounds(ui.max_rect().translate(Vec2::new(10.0, 10.0)) * 0.9);
             self.sim.update(dt);
-            // self.sim.update(dt / 3.0);
-            // self.sim.update(dt / 3.0);
-
-            // ui.add(Image::from_texture(&t).fit_to_exact_size(rect.size()));
+            if ctx.input(|i| i.key_pressed(Key::ArrowRight)) {
+                if !self.sim.running {
+                    self.sim.start();
+                    self.sim.update(1.0 / 60.0);
+                    self.sim.stop();
+                }
+            }
+            // self.scene.sim.update(dt / 3.0);
+            // self.scene.sim.update(dt / 3.0);
 
             let painter = ui.painter();
             painter.rect_stroke(
@@ -81,12 +89,12 @@ impl App for FluidApp {
 
             for particle in self.sim.particles.iter() {
                 let vel = -particle.vel.length() * self.color_muliplier + self.color_offset;
-                let color = Hsva::new(vel, 0.7, 0.8, 1.0);
+                let color = Hsva::new(vel.max(0.0), 0.7, 0.8, 1.0);
                 painter.circle_filled(particle.pos.to_pos2(), self.sim.particle_size, color);
             }
 
-            // let size = (ui.max_rect().size() / self.sim.spatial_map.cell_size).ceil();
-            // let p = &self.sim.spatial_map;
+            // let size = (ui.max_rect().size() / self.scene.sim.spatial_map.cell_size).ceil();
+            // let p = &self.scene.sim.spatial_map;
             //
             // for j in 0..size.y as usize {
             //     for i in 0..size.x as usize {
@@ -114,7 +122,7 @@ impl App for FluidApp {
             //         //     Color32::GREEN,
             //         // );
             //         // for i in p.get(rect.center().to_vec2()) {
-            //         //     let particle = &self.sim.particles[i];
+            //         //     let particle = &self.scene.sim.particles[i];
             //         //     painter.text(
             //         //         particle.pos.to_pos2(),
             //         //         Align2::CENTER_CENTER,
@@ -144,8 +152,13 @@ impl App for FluidApp {
             );
             a.add_float(&mut self.sim.particle_size, 0.0..=50.0, "Particle Size");
             a.add_float(&mut self.sim.gradient_step, 0.0..=0.01, "Gradient Step");
-            a.add_float(&mut self.sim.target_density, 0.0..=0.1, "Target Density");
+            a.add_drag(&mut self.sim.target_density, "Target Density");
             a.add_drag(&mut self.sim.pressure_multiplier, "Pressure Multiplier");
+            a.add_drag(
+                &mut self.sim.near_pressure_multiplier,
+                "Near Pressure Multiplier",
+            );
+            a.add_drag(&mut self.sim.viscosity_strength, "Viscosity Strength");
             a.add_drag(&mut self.color_muliplier, "Color Multiplier");
             a.add_float(&mut self.color_offset, 0.0..=1.0, "Color Offset");
             a.add_drag(&mut self.radius, "Force Radius");
@@ -157,38 +170,5 @@ impl App for FluidApp {
 
         // ctx.request_repaint_after(Duration::from_millis(500));
         ctx.request_repaint();
-    }
-}
-impl FluidApp {
-    fn create_texture(&self, ctx: &Context) -> TextureHandle {
-        let size = 100;
-        let pixels = vec![Color32::BLACK; size * size]
-            .iter()
-            .enumerate()
-            .map(|(index, _c)| {
-                let x = index % size;
-                let y = index / size;
-
-                let normal = Vec2::new(x as f32 / size as f32, y as f32 / size as f32);
-                let pos = normal * self.sim.bounds.size() + self.sim.bounds.min.to_vec2();
-
-                // let c = (f32::cos((pos.x * 0.020 - 3.0 + f32::sin(pos.y * 0.02))) + 1.0) * 0.5;
-                // return Color32::from_gray((c * 255.0) as u8);
-
-                let den = self.sim.calculate_density(pos);
-                // return Color32::from_rgb(0, 0, (den * 255.0) as u8);
-                let pressure = self.sim.convert_density_to_pressure(den)
-                    / self.sim.pressure_multiplier
-                    * 2550.0;
-                if pressure < 0.0 {
-                    return Color32::from_rgb(0, 0, pressure.abs() as u8);
-                } else {
-                    return Color32::from_rgb(pressure.abs() as u8, 0, 0);
-                }
-            })
-            .collect();
-
-        let image = egui::ColorImage::new([size, size], pixels);
-        return ctx.load_texture("Density Map", image, TextureOptions::LINEAR);
     }
 }
