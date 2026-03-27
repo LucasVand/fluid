@@ -39,6 +39,10 @@ impl<'a> BindGroupBuilder<'a> {
         })
     }
     pub fn build(self, label: &'a str) -> BindGroup {
+        if self.entries.is_empty() {
+            panic!("BindGroupBuilder: no entries added. Call .buffer() or .buffer_chunked() to add bind group entries before build()");
+        }
+
         self.device.create_bind_group(&BindGroupDescriptor {
             label: Some(label),
             layout: self.layout,

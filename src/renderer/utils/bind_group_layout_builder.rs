@@ -70,6 +70,10 @@ impl<'a> BindGroupLayoutBuilder<'a> {
     //     })
     // }
     pub fn build(self, label: &'a str) -> BindGroupLayout {
+        if self.entries.is_empty() {
+            panic!("BindGroupLayoutBuilder: no entries added. Call .uniform(), .uniform_dyn(), or .buffer() to add bind group layout entries before build()");
+        }
+
         self.device
             .create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some(label),

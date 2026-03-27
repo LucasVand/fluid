@@ -62,14 +62,27 @@ impl<'a> TextureBuilder<'a> {
         self
     }
     pub fn build(self, label: &'a str) -> Texture {
+        let extent = self
+            .extent
+            .expect("TextureBuilder: texture size not set. Call .size(width, height, depth_or_array_layers) before build()");
+        let dimension = self
+            .dimension
+            .expect("TextureBuilder: texture dimension not set. Call .dimension(TextureDimension) before build()");
+        let format = self
+            .format
+            .expect("TextureBuilder: texture format not set. Call .format(TextureFormat) before build()");
+        let usages = self
+            .usages
+            .expect("TextureBuilder: texture usages not set. Call .usages(TextureUsages) before build()");
+
         self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
-            size: self.extent.unwrap(),
+            size: extent,
             mip_level_count: self.mip_level_count,
             sample_count: self.sample_count,
-            dimension: self.dimension.unwrap(),
-            format: self.format.unwrap(),
-            usage: self.usages.unwrap(),
+            dimension,
+            format,
+            usage: usages,
             view_formats: self.view_formats,
         })
     }

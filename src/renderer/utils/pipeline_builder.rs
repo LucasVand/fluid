@@ -95,7 +95,13 @@ impl<'a> PipelineBuilder<'a> {
         self
     }
     pub fn build(self, label: &'a str) -> RenderPipeline {
-        let module = self.module.unwrap();
+        let module = self
+            .module
+            .expect("PipelineBuilder: shader module not set. Call .shader(wgsl_code, label) before build()");
+        let primitive = self
+            .primitive
+            .expect("PipelineBuilder: primitive topology not set. Call .primitive(PrimitiveTopology) before build()");
+
         let layout = self
             .device
             .create_pipeline_layout(&PipelineLayoutDescriptor {
@@ -113,7 +119,7 @@ impl<'a> PipelineBuilder<'a> {
                     compilation_options: PipelineCompilationOptions::default(),
                     buffers: &self.vertex_buffers,
                 },
-                primitive: self.primitive.unwrap(),
+                primitive,
                 depth_stencil: self.depth_stencil,
                 multisample: MultisampleState::default(),
                 fragment: Some(FragmentState {
