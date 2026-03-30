@@ -6,7 +6,7 @@ use eframe::wgpu::{
     StencilState, TextureFormat, VertexBufferLayout, VertexState, wgc::device,
 };
 
-pub struct PipelineBuilder<'a> {
+pub struct RenderPipelineBuilder<'a> {
     device: &'a Device,
     bind_group_layouts: &'a [&'a BindGroupLayout],
 
@@ -21,7 +21,7 @@ pub struct PipelineBuilder<'a> {
     color_targets: Vec<Option<ColorTargetState>>,
 }
 
-impl<'a> PipelineBuilder<'a> {
+impl<'a> RenderPipelineBuilder<'a> {
     pub fn new(device: &'a Device) -> Self {
         Self {
             device,
@@ -95,9 +95,9 @@ impl<'a> PipelineBuilder<'a> {
         self
     }
     pub fn build(self, label: &'a str) -> RenderPipeline {
-        let module = self
-            .module
-            .expect("PipelineBuilder: shader module not set. Call .shader(wgsl_code, label) before build()");
+        let module = self.module.expect(
+            "PipelineBuilder: shader module not set. Call .shader(wgsl_code, label) before build()",
+        );
         let primitive = self
             .primitive
             .expect("PipelineBuilder: primitive topology not set. Call .primitive(PrimitiveTopology) before build()");

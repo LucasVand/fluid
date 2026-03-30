@@ -5,11 +5,8 @@ use eframe::wgpu::{
     ShaderStages, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
 };
 
-use crate::scenes::{
-    shapes::shape::Shape,
-    utils::{
-        bind_group_builder::BindGroupBuilder, bind_group_layout_builder::BindGroupLayoutBuilder,
-    },
+use crate::renderer::utils::{
+    bind_group_builder::BindGroupBuilder, bind_group_layout_builder::BindGroupLayoutBuilder,
 };
 
 pub struct SharedBuffer {
@@ -110,14 +107,7 @@ impl SharedBuffer {
             bytemuck::cast_slice(&model),
         );
     }
-    pub fn push_shape(&mut self, q: &Queue, s: &Shape) {
-        self.push(
-            q,
-            &s.verticies,
-            &s.indicies,
-            &s.model_matrix().to_cols_array_2d(),
-        );
-    }
+
     pub fn layout(&self) -> VertexBufferLayout<'_> {
         VertexBufferLayout {
             array_stride: 24,

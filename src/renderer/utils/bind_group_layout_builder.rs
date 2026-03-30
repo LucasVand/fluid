@@ -1,6 +1,7 @@
 use eframe::wgpu::{
     BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
-    BufferBindingType, Device, ShaderStages, TextureSampleType,
+    BufferBindingType, Device, ShaderStages, TextureSampleType, TextureViewDimension,
+    SamplerBindingType,
 };
 
 pub struct BindGroupLayoutBuilder<'a> {
@@ -57,21 +58,43 @@ impl<'a> BindGroupLayoutBuilder<'a> {
             count: None,
         })
     }
-    // pub fn texture(self, binding: u32, visibility: ShaderStages) -> Self {
-    //     self.push(BindGroupLayoutEntry {
-    //         binding,
-    //         visibility,
-    //         ty: BindingType::Texture {
-    //             sample_type: TextureSampleType::Float { filterable: true },
-    //             view_dimension: (),
-    //             multisampled: (),
-    //         },
-    //         count: None,
-    //     })
-    // }
+    pub fn texture(
+        self,
+        binding: u32,
+        visibility: ShaderStages,
+        dimension: TextureViewDimension,
+        sample_type: TextureSampleType,
+    ) -> Self {
+        self.push(BindGroupLayoutEntry {
+            binding,
+            visibility,
+            ty: BindingType::Texture {
+                sample_type,
+                view_dimension: dimension,
+                multisampled: false,
+            },
+            count: None,
+        })
+    }
+    pub fn sampler(self, binding: u32, visibility: ShaderStages) -> Self {
+        self.push(BindGroupLayoutEntry {
+            binding,
+            visibility,
+            ty: BindingType::Sampler(SamplerBindingType::Filtering),
+            count: None,
+        })
+    }
+    pub fn sampler_comparison(self, binding: u32, visibility: ShaderStages) -> Self {
+        self.push(BindGroupLayoutEntry {
+            binding,
+            visibility,
+            ty: BindingType::Sampler(SamplerBindingType::Comparison),
+            count: None,
+        })
+    }
     pub fn build(self, label: &'a str) -> BindGroupLayout {
         if self.entries.is_empty() {
-            panic!("BindGroupLayoutBuilder: no entries added. Call .uniform(), .uniform_dyn(), or .buffer() to add bind group layout entries before build()");
+            panic!("BindGroupLayoutBuilder: no entries added. Call .uniform(), .uniform_dyn(), .buffer(), .texture(), .sampler(), or .sampler_comparison() to add bind group layout entries before build()");
         }
 
         self.device

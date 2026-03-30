@@ -1,17 +1,14 @@
-use core::panic;
-use std::{cmp::max, f32::consts::PI, mem, os::unix::thread, sync::Arc};
+use std::{f32::consts::PI, mem};
 
-use eframe::egui::{Rect, Vec2, debug_text::print};
-use rayon::iter::{
-    IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator,
-};
+use glam::Vec3;
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
-use crate::spatial_map::SpatialMap;
+use crate::{renderer::utils::box3d::Box3d, spatial_map::SpatialMap};
 
 pub struct FluidSim {
     pub particles: Vec<Particle>,
     pub spatial_map: SpatialMap,
-    pub bounds: Rect,
+    pub bounds: Box3d,
     pub particle_size: f32,
     pub smoothing_radius: f32,
     pub mass: f32,
@@ -26,14 +23,14 @@ pub struct FluidSim {
 
 #[derive(Debug)]
 pub struct Particle {
-    pub pos: Vec2,
-    pub vel: Vec2,
+    pub pos: Vec3,
+    pub vel: Vec3,
     pub property: f32,
     pub density: (f32, f32),
-    pub predicted: Vec2,
+    pub predicted: Vec3,
 }
 impl Particle {
-    pub fn new(pos: Vec2, vel: Vec2) -> Self {
+    pub fn new(pos: Vec3, vel: Vec3) -> Self {
         Particle {
             pos: pos,
             vel: vel,
@@ -46,7 +43,7 @@ impl Particle {
 
 impl FluidSim {
     const DAMPING: f32 = 0.7;
-    pub fn new(size: usize, bounds: Rect) -> FluidSim {
+    pub fn new(size: usize, bounds: Box3d) -> FluidSim {
         let mut parts = Self::create_box(size, bounds);
         for p in parts.iter_mut() {
             p.property = (f32::cos(p.pos.x * 0.020 - 3.0 + f32::sin(p.pos.y * 0.02)) + 1.0) * 0.5;
@@ -54,7 +51,7 @@ impl FluidSim {
         let smoothing_radius = 40.0;
         let mut s = Self {
             gravity: 250.0,
-            spatial_map: SpatialMap::new(bounds, smoothing_radius, parts.len()),
+            spatial_map: SpatialMap::new(smoothing_radius, parts.len()),
             particles: parts,
             bounds,
             particle_size: 2.0,
@@ -81,54 +78,57 @@ impl FluidSim {
     pub fn start(&mut self) {
         self.running = true;
     }
-    pub fn apply_force(&mut self, pos: Vec2, radius: f32, strength: f32) {
+    pub fn apply_force(&mut self, pos: Vec3, radius: f32, strength: f32) {
         for p in self.particles.iter_mut() {
             let offset = pos - p.pos;
-            let dst_sq = offset.length_sq();
+            let dst_sq = offset.length_squared();
             if dst_sq < radius * radius {
                 let dst = dst_sq.sqrt();
                 let dir = if dst < f32::EPSILON {
-                    Vec2::ZERO
+                    Vec3::ZERO
                 } else {
                     offset / dst
                 };
 
-                let center_t = (dst / radius);
+                let center_t = dst / radius;
                 let force = (dir * strength - p.vel) * center_t;
 
                 p.vel += force / self.mass;
             }
         }
     }
-    pub fn create_random(size: usize, bounds: Rect) -> Vec<Particle> {
+    pub fn create_random(size: usize, bounds: Box3d) -> Vec<Particle> {
         fastrand::seed(10);
         let mut particles = Vec::new();
         for _ in 0..size {
             let x = fastrand::f32() * bounds.size().x;
             let y = fastrand::f32() * bounds.size().y;
-            particles.push(Particle::new(
-                Vec2::new(x, y) + bounds.min.to_vec2(),
-                Vec2::ZERO,
-            ));
+            particles.push(Particle::new(Vec3::new(x, y, 0.0) + bounds.min, Vec3::ZERO));
         }
         return particles;
     }
-    pub fn create_box(size: usize, bounds: Rect) -> Vec<Particle> {
+    pub fn create_box(size: usize, bounds: Box3d) -> Vec<Particle> {
         let mut particles = Vec::new();
 
-        let rect_size = f32::sqrt(size as f32).ceil() as usize;
+        let cube_size = f32::cbrt(size as f32).ceil() as usize;
 
         let particle_dist = 5.0;
-        let center_offset = (rect_size as f32 * particle_dist) / 2.0;
-        let center = bounds.center().to_vec2() - Vec2::new(center_offset, center_offset);
+        let center_offset = (cube_size as f32 * particle_dist) / 2.0;
+        let center = bounds.center() - Vec3::new(center_offset, center_offset, center_offset);
 
-        for i in 0..rect_size {
-            for j in 0..rect_size {
-                if i * rect_size + j < size {
-                    particles.push(Particle::new(
-                        Vec2::new(j as f32 * particle_dist, i as f32 * particle_dist) + center,
-                        Vec2::ZERO,
-                    ));
+        for i in 0..cube_size {
+            for j in 0..cube_size {
+                for k in 0..cube_size {
+                    if i * cube_size * cube_size + j * cube_size + k < size {
+                        particles.push(Particle::new(
+                            Vec3::new(
+                                j as f32 * particle_dist,
+                                i as f32 * particle_dist,
+                                k as f32 * particle_dist,
+                            ) + center,
+                            Vec3::ZERO,
+                        ));
+                    }
                 }
             }
         }
@@ -148,8 +148,7 @@ impl FluidSim {
         });
     }
     pub fn update_spatial_map(&mut self) {
-        self.spatial_map
-            .update_params(self.bounds, self.smoothing_radius);
+        self.spatial_map.update_params(self.smoothing_radius);
 
         for (index, part) in self.particles.iter().enumerate() {
             self.spatial_map.insert(index, part.predicted);
@@ -161,17 +160,26 @@ impl FluidSim {
             return;
         }
         for part in self.particles.iter_mut() {
-            part.vel += Vec2::DOWN * self.gravity * delta_time;
+            part.vel += Vec3::new(0.0, -1.0, 0.0) * self.gravity * delta_time;
 
             part.predicted = part.pos + part.vel * 1.0 / 60.0;
         }
+
+        let mut parts = mem::take(&mut self.particles);
+        for part in parts.iter_mut() {
+            part.pos += part.vel * delta_time;
+            println!("{:?}, {:?}", part.pos, part.vel);
+            self.collide_all_sides(part);
+        }
+        self.particles = parts;
+        return;
 
         self.update_spatial_map();
 
         self.update_densities();
 
         // pressure forces
-        let forces: Vec<Vec2> = self
+        let forces: Vec<Vec3> = self
             .particles
             .par_iter()
             .enumerate()
@@ -187,7 +195,7 @@ impl FluidSim {
         }
 
         // viscosity force
-        let visc_forces: Vec<Vec2> = self
+        let visc_forces: Vec<Vec3> = self
             .particles
             .par_iter()
             .enumerate()
@@ -250,21 +258,20 @@ impl FluidSim {
         let v: f32 = radius - dist;
         return -v * v;
     }
-    pub fn calculate_density(&self, sample: Vec2) -> (f32, f32) {
+    pub fn calculate_density(&self, sample: Vec3) -> (f32, f32) {
         let mut density: f32 = 0.00001;
         let mut near_density: f32 = 0.00001;
 
-        let sample_clamped = self.bounds.clamp(sample.to_pos2()).to_vec2();
-        let possible = self.spatial_map.get_around(sample_clamped);
+        let possible = self.spatial_map.get_around(sample);
         let mut out_dist = Vec::new();
         for i in possible {
             let part = &self.particles[i];
             let pos = part.predicted;
 
-            if part.predicted == sample_clamped {
+            if part.predicted == sample {
                 continue;
             }
-            let dst = (pos - sample_clamped).length();
+            let dst = (pos - sample).length();
             out_dist.push(dst);
             let influence = Self::smoothing_kernal(self.smoothing_radius, dst);
             let near_influence = Self::near_density_smoothing_kernal(self.smoothing_radius, dst);
@@ -273,19 +280,15 @@ impl FluidSim {
             near_density += self.mass * near_influence;
         }
         if density == 0.00001 {
-            println!("bad density: {}", sample_clamped);
-            println!(
-                "Out of bounds: {}",
-                self.bounds.contains(sample_clamped.to_pos2())
-            );
+            println!("bad density: {}", sample);
             println!("Out Dists: {:?}", out_dist);
         }
 
         return (density, near_density);
     }
 
-    pub fn calculate_pressure_force(&self, particle_index: usize) -> Vec2 {
-        let mut pressure_force = Vec2::ZERO;
+    pub fn calculate_pressure_force(&self, particle_index: usize) -> Vec3 {
+        let mut pressure_force = Vec3::ZERO;
         let sample = self.particles[particle_index].predicted;
         let possible = self.spatial_map.get_around(sample);
 
@@ -322,10 +325,10 @@ impl FluidSim {
         let near_pressure = near_density * self.near_pressure_multiplier;
         return (pressure, near_pressure);
     }
-    fn calculate_viscosity_force(&self, particle_index: usize) -> Vec2 {
-        let mut vis_force: Vec2 = Vec2::ZERO;
-        let i_pos: Vec2 = self.particles[particle_index].predicted;
-        let i_vel: Vec2 = self.particles[particle_index].vel;
+    fn calculate_viscosity_force(&self, particle_index: usize) -> Vec3 {
+        let mut vis_force: Vec3 = Vec3::ZERO;
+        let i_pos: Vec3 = self.particles[particle_index].predicted;
+        let i_vel: Vec3 = self.particles[particle_index].vel;
         for n_index in self.spatial_map.get_around(i_pos) {
             let particle = &self.particles[n_index];
 
@@ -343,33 +346,37 @@ impl FluidSim {
     pub fn collide_all_sides(&self, particle: &mut Particle) {
         let half_size = self.particle_size / 2.0;
 
-        // Check X axis independently
-        let left_diff = (particle.pos.x - half_size) - self.bounds.min.x;
-        if left_diff < 0.0 {
+        // Check X axis
+        if particle.pos.x - half_size < self.bounds.min.x {
             particle.pos.x = self.bounds.min.x + half_size;
             particle.vel.x *= -1.0 * Self::DAMPING;
         }
-
-        let right_diff = self.bounds.max.x - (particle.pos.x + half_size);
-        if right_diff < 0.0 {
+        if particle.pos.x + half_size > self.bounds.max.x {
             particle.pos.x = self.bounds.max.x - half_size;
             particle.vel.x *= -1.0 * Self::DAMPING;
         }
 
-        // Check Y axis independently
-        let top_diff = (particle.pos.y - half_size) - self.bounds.min.y;
-        if top_diff < 0.0 {
+        // Check Y axis
+        if particle.pos.y - half_size < self.bounds.min.y {
             particle.pos.y = self.bounds.min.y + half_size;
             particle.vel.y *= -1.0 * Self::DAMPING;
         }
-
-        let bottom_diff = self.bounds.max.y - (particle.pos.y + half_size);
-        if bottom_diff < 0.0 {
+        if particle.pos.y + half_size > self.bounds.max.y {
             particle.pos.y = self.bounds.max.y - half_size;
             particle.vel.y *= -1.0 * Self::DAMPING;
         }
+
+        // Check Z axis
+        if particle.pos.z - half_size < self.bounds.min.z {
+            particle.pos.z = self.bounds.min.z + half_size;
+            particle.vel.z *= -1.0 * Self::DAMPING;
+        }
+        if particle.pos.z + half_size > self.bounds.max.z {
+            particle.pos.z = self.bounds.max.z - half_size;
+            particle.vel.z *= -1.0 * Self::DAMPING;
+        }
     }
-    pub fn set_bounds(&mut self, rect: Rect) {
+    pub fn set_bounds(&mut self, rect: Box3d) {
         self.bounds = rect;
     }
 }

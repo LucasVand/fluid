@@ -1,42 +1,43 @@
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3, Vec4};
 
-#[repr(C)]
-#[derive(Clone, Copy, Zeroable, Pod)]
 pub struct Camera {
-    pub position: Vec3,        // 12
-    pub forwards: Vec3,        // 12
-    pub right: Vec3,           // 12
-    pub up: Vec3,              // 12
-    yaw: f32,                  // 4
-    pitch: f32,                // 4
-    pub matrix: [[f32; 4]; 4], // 64
+    pub position: Vec3, // 12
+    pub forwards: Vec3, // 12
+    pub right: Vec3,    // 12
+    pub up: Vec3,       // 12
+    yaw: f32,           // 4
+    pitch: f32,         // 4
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+pub struct GpuCamera {
+    matrix: [[f32; 4]; 4], // 64
+    position: Vec3,        // 12
+    _pad: f32,
 }
 
 const MOVEMENT_AMOUNT: f32 = 0.1;
 const ROTATE_AMOUNT: f32 = 0.1;
 impl Camera {
     pub fn new() -> Self {
-        let position = Vec3::new(-5.0, 0.0, 2.0);
-        let yaw: f32 = 0.0;
+        let position = Vec3::new(20.0, 0.0, 20.0);
+        let yaw: f32 = -90.0;
         let pitch: f32 = 0.0;
 
         let forwards = Vec3::new(1.0, 0.0, 0.0);
         let right = Vec3::new(0.0, 0.0, 1.0);
         let up = Vec3::new(0.0, 1.0, 0.0);
 
-        let mut c = Camera {
+        Camera {
             position,
             yaw,
             pitch,
             forwards,
             right,
             up,
-            matrix: [[0.0; 4]; 4],
-        };
-        c.update_projection();
-
-        return c;
+        }
     }
 
     pub fn spin(&mut self, d_yaw: f32, d_pitch: f32) {
@@ -77,9 +78,7 @@ impl Camera {
             + self.forwards * d_forwards * MOVEMENT_AMOUNT;
         // self.position.y = y;
     }
-    pub fn update_projection(&mut self) {
-        self.matrix = self.get_projection();
-    }
+
     pub fn get_projection(&self) -> [[f32; 4]; 4] {
         let c0 = Vec4::new(self.right.x, self.up.x, -self.forwards.x, 0.0);
         let c1 = Vec4::new(self.right.y, self.up.y, -self.forwards.y, 0.0);
@@ -93,10 +92,17 @@ impl Camera {
         let fov_y: f32 = f32::to_radians(60.0);
         let aspect = 1200.0 / 700.0;
         let z_near = 0.1;
-        let z_far = 10.0;
+        let z_far = 100.0;
         let projection = Mat4::perspective_rh_gl(fov_y, aspect, z_near, z_far);
 
         let view_proj = projection * view;
         return view_proj.to_cols_array_2d();
+    }
+    pub fn to_gpu(&self) -> GpuCamera {
+        GpuCamera {
+            matrix: self.get_projection(),
+            position: self.position,
+            _pad: 0.0,
+        }
     }
 }

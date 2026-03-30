@@ -1,6 +1,6 @@
 use eframe::wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, Buffer,
-    BufferBinding, BufferSize, Device,
+    BufferBinding, BufferSize, Device, Sampler, TextureView,
 };
 
 pub struct BindGroupBuilder<'a> {
@@ -38,9 +38,23 @@ impl<'a> BindGroupBuilder<'a> {
             }),
         })
     }
+    pub fn texture(self, binding: u32, texture_view: &'a TextureView) -> Self {
+        self.push(BindGroupEntry {
+            binding,
+            resource: BindingResource::TextureView(texture_view),
+        })
+    }
+    pub fn sampler(self, binding: u32, sampler: &'a Sampler) -> Self {
+        self.push(BindGroupEntry {
+            binding,
+            resource: BindingResource::Sampler(sampler),
+        })
+    }
     pub fn build(self, label: &'a str) -> BindGroup {
         if self.entries.is_empty() {
-            panic!("BindGroupBuilder: no entries added. Call .buffer() or .buffer_chunked() to add bind group entries before build()");
+            panic!(
+                "BindGroupBuilder: no entries added. Call .buffer() or .buffer_chunked() to add bind group entries before build()"
+            );
         }
 
         self.device.create_bind_group(&BindGroupDescriptor {
