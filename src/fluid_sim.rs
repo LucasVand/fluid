@@ -19,6 +19,7 @@ pub struct FluidSim {
     pub running: bool,
     pub gravity: f32,
     pub viscosity_strength: f32,
+    pub boundary_density_multiplier: f32,
 }
 
 #[derive(Debug)]
@@ -28,6 +29,7 @@ pub struct Particle {
     pub property: f32,
     pub density: (f32, f32),
     pub predicted: Vec3,
+    pub is_boundary: bool,
 }
 impl Particle {
     pub fn new(pos: Vec3, vel: Vec3) -> Self {
@@ -37,6 +39,7 @@ impl Particle {
             property: 0.0,
             density: (0.0, 0.0),
             predicted: pos,
+            is_boundary: false,
         }
     }
 }
@@ -49,6 +52,12 @@ impl FluidSim {
             p.property = (f32::cos(p.pos.x * 0.020 - 3.0 + f32::sin(p.pos.y * 0.02)) + 1.0) * 0.5;
         }
         let smoothing_radius = 40.0;
+
+        // Generate and append boundary particles
+        let boundary_spacing = smoothing_radius / 2.0;
+        let mut boundary_parts = Self::generate_boundary_particles(bounds, boundary_spacing);
+        // parts.append(&mut boundary_parts);
+
         let mut s = Self {
             gravity: 250.0,
             spatial_map: SpatialMap::new(smoothing_radius, parts.len()),
@@ -63,9 +72,11 @@ impl FluidSim {
             near_pressure_multiplier: 0.01,
             running: false,
             viscosity_strength: 100.0,
+            boundary_density_multiplier: 1.3,
         };
         s.update_spatial_map();
         s.update_densities();
+        s.update_boundary_density_multiplied(s.boundary_density_multiplier);
 
         return s;
     }
@@ -156,6 +167,134 @@ impl FluidSim {
         }
         return particles;
     }
+
+    fn add_face_particles(
+        particles: &mut Vec<Particle>,
+        coord1_start: f32,
+        coord1_end: f32,
+        fixed_coord: f32,
+        coord2_start: f32,
+        coord2_end: f32,
+        spacing: f32,
+        is_edge: bool,
+        axis_order: usize, // 0 = (x, y, z), 1 = (x, z, y), 2 = (y, z, x)
+    ) {
+        let start = if is_edge {
+            coord1_start + spacing
+        } else {
+            coord1_start
+        };
+        let end1 = if is_edge {
+            coord1_end - spacing
+        } else {
+            coord1_end
+        };
+
+        let mut c1 = start;
+        while c1 <= end1 {
+            let mut c2 = coord2_start;
+            while c2 <= coord2_end {
+                let pos = match axis_order {
+                    0 => Vec3::new(c1, fixed_coord, c2),
+                    1 => Vec3::new(c1, c2, fixed_coord),
+                    _ => Vec3::new(fixed_coord, c1, c2),
+                };
+
+                let mut p = Particle::new(pos, Vec3::ZERO);
+                p.is_boundary = true;
+                particles.push(p);
+                c2 += spacing;
+            }
+            c1 += spacing;
+        }
+    }
+
+    fn generate_boundary_particles(bounds: Box3d, spacing: f32) -> Vec<Particle> {
+        let mut boundary_particles = Vec::new();
+
+        let min = bounds.min;
+        let max = bounds.max;
+
+        // Bottom face (y = min) - full face
+        Self::add_face_particles(
+            &mut boundary_particles,
+            min.x,
+            max.x,
+            min.y,
+            min.z,
+            max.z,
+            spacing,
+            false,
+            0,
+        );
+
+        // Top face (y = max) - full face
+        Self::add_face_particles(
+            &mut boundary_particles,
+            min.x,
+            max.x,
+            max.y,
+            min.z,
+            max.z,
+            spacing,
+            false,
+            0,
+        );
+
+        // Front face (z = min) - exclude top/bottom edges
+        Self::add_face_particles(
+            &mut boundary_particles,
+            min.x,
+            max.x,
+            min.z,
+            min.y,
+            max.y,
+            spacing,
+            true,
+            1,
+        );
+
+        // Back face (z = max) - exclude top/bottom edges
+        Self::add_face_particles(
+            &mut boundary_particles,
+            min.x,
+            max.x,
+            max.z,
+            min.y,
+            max.y,
+            spacing,
+            true,
+            1,
+        );
+
+        // Left face (x = min) - exclude all edges
+        Self::add_face_particles(
+            &mut boundary_particles,
+            min.y,
+            max.y,
+            min.x,
+            min.z,
+            max.z,
+            spacing,
+            true,
+            2,
+        );
+
+        // Right face (x = max) - exclude all edges
+        Self::add_face_particles(
+            &mut boundary_particles,
+            min.y,
+            max.y,
+            max.x,
+            min.z,
+            max.z,
+            spacing,
+            true,
+            2,
+        );
+
+        boundary_particles
+    }
     pub fn update_densities(&mut self) {
         let den: Vec<(f32, f32)> = self
             .particles
@@ -177,12 +316,36 @@ impl FluidSim {
         }
         self.spatial_map.finalize();
     }
+
+    pub fn update_boundary_density(&mut self, density: f32) {
+        for part in self.particles.iter_mut() {
+            if part.is_boundary {
+                part.density.0 = density;
+            }
+        }
+    }
+
+    pub fn update_boundary_density_multiplied(&mut self, multiplier: f32) {
+        let boundary_density = self.target_density * multiplier;
+        self.update_boundary_density(boundary_density);
+    }
+
+    pub fn set_all_boundary_densities(&mut self, density: f32, near_density: f32) {
+        for part in self.particles.iter_mut() {
+            if part.is_boundary {
+                part.density = (density, near_density);
+            }
+        }
+    }
     pub fn update(&mut self, delta_time: f32) {
         if !self.running {
             return;
         }
         for part in self.particles.iter_mut() {
-            part.vel += Vec3::new(0.0, -1.0, 0.0) * self.gravity * delta_time;
+            // Skip gravity and velocity updates for boundary particles
+            if !part.is_boundary {
+                part.vel += Vec3::new(0.0, -1.0, 0.0) * self.gravity * delta_time;
+            }
 
             part.predicted = part.pos + part.vel * 1.0 / 60.0;
         }
@@ -223,8 +386,11 @@ impl FluidSim {
 
         let mut parts = mem::take(&mut self.particles);
         for part in parts.iter_mut() {
-            part.pos += part.vel * delta_time;
-            self.collide_all_sides(part);
+            // Skip position updates for boundary particles (they're static)
+            if !part.is_boundary {
+                part.pos += part.vel * delta_time;
+                self.collide_all_sides(part);
+            }
         }
         self.particles = parts;
     }
@@ -301,6 +467,11 @@ impl FluidSim {
     }
 
     pub fn calculate_pressure_force(&self, particle_index: usize) -> Vec3 {
+        // Skip force calculation for boundary particles
+        if self.particles[particle_index].is_boundary {
+            return Vec3::ZERO;
+        }
+
         let mut pressure_force = Vec3::ZERO;
         let sample = self.particles[particle_index].predicted;
         let possible = self.spatial_map.get_around(sample);
@@ -339,6 +510,11 @@ impl FluidSim {
         return (pressure, near_pressure);
     }
     fn calculate_viscosity_force(&self, particle_index: usize) -> Vec3 {
+        // Skip force calculation for boundary particles
+        if self.particles[particle_index].is_boundary {
+            return Vec3::ZERO;
+        }
+
         let mut vis_force: Vec3 = Vec3::ZERO;
         let i_pos: Vec3 = self.particles[particle_index].predicted;
         let i_vel: Vec3 = self.particles[particle_index].vel;
@@ -357,6 +533,11 @@ impl FluidSim {
     }
 
     pub fn collide_all_sides(&self, particle: &mut Particle) {
+        // Skip collision for boundary particles (they're static)
+        if particle.is_boundary {
+            return;
+        }
+
         let half_size = self.particle_size / 2.0;
 
         // Check X axis

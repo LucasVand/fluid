@@ -32,10 +32,11 @@ impl FluidApp {
         let size = 120.0;
         let bounds = Box3d::from_center(Vec3::new(0.0, 0.0, 0.0), Vec3::new(size, size, size));
         let count = 3000;
+        let sim = FluidSim::new(count as usize, bounds);
         Self {
             particle_size: 2.0,
-            render: Render::new(cc, count, bounds),
-            sim: FluidSim::new(count as usize, bounds),
+            render: Render::new(cc, sim.particles.len() as u64, bounds),
+            sim: sim,
             modifiers_open: false,
             pos: None,
             color_muliplier: 0.005,
@@ -84,6 +85,7 @@ impl App for FluidApp {
             let dt = ctx.input(|i| i.unstable_dt);
 
             self.sim.update(dt);
+            self.sim.update_boundary_density_multiplied(self.sim.boundary_density_multiplier);
             self.render
                 .render(&self.sim.particles, RenderParams::from_app(self));
 
@@ -122,6 +124,7 @@ impl App for FluidApp {
                 "Near Pressure Multiplier",
             );
             a.add_drag(&mut self.sim.viscosity_strength, "Viscosity Strength");
+            a.add_drag(&mut self.sim.boundary_density_multiplier, "Boundary Density Multiplier");
             a.add_drag(&mut self.color_muliplier, "Color Multiplier");
             a.add_float(&mut self.color_offset, 0.0..=1.0, "Color Offset");
             a.add_drag(&mut self.radius, "Force Radius");
