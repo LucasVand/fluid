@@ -13,7 +13,7 @@ use crate::{
     renderer::utils::{
         bind_group_builder::BindGroupBuilder, bind_group_layout_builder::BindGroupLayoutBuilder,
         box3d::Box3d, buffer_builder::BufferBuilder, generic_shared_buffer::SharedBuffer,
-        render_pipeline_builder::RenderPipelineBuilder, icosphere::Icosphere,
+        icosphere::Icosphere, render_pipeline_builder::RenderPipelineBuilder,
     },
 };
 
@@ -109,24 +109,23 @@ impl FluidRenderer {
             .primitive(PrimitiveTopology::TriangleList)
             .bind_group_layout(&[&particles_bind_group_layout, global_bind_group_layout])
             .vertex_entry("vs_main")
-            .vertex_buffers(vec![
-                eframe::wgpu::VertexBufferLayout {
-                    array_stride: mem::size_of::<crate::renderer::utils::icosphere::SphereVertex>() as u64,
-                    step_mode: eframe::wgpu::VertexStepMode::Vertex,
-                    attributes: &[
-                        eframe::wgpu::VertexAttribute {
-                            format: eframe::wgpu::VertexFormat::Float32x3,
-                            offset: 0,
-                            shader_location: 0,
-                        },
-                        eframe::wgpu::VertexAttribute {
-                            format: eframe::wgpu::VertexFormat::Float32x3,
-                            offset: 12,
-                            shader_location: 1,
-                        },
-                    ],
-                },
-            ])
+            .vertex_buffers(vec![eframe::wgpu::VertexBufferLayout {
+                array_stride: mem::size_of::<crate::renderer::utils::icosphere::SphereVertex>()
+                    as u64,
+                step_mode: eframe::wgpu::VertexStepMode::Vertex,
+                attributes: &[
+                    eframe::wgpu::VertexAttribute {
+                        format: eframe::wgpu::VertexFormat::Float32x3,
+                        offset: 0,
+                        shader_location: 0,
+                    },
+                    eframe::wgpu::VertexAttribute {
+                        format: eframe::wgpu::VertexFormat::Float32x3,
+                        offset: 12,
+                        shader_location: 1,
+                    },
+                ],
+            }])
             .depth(TextureFormat::Depth32Float)
             .fragment_entry("fs_main")
             .color_format(texture_format)
@@ -168,7 +167,7 @@ impl FluidRenderer {
 
         // Generate icosphere
         let sphere = Icosphere::new(2); // 2 subdivisions = smooth sphere
-        
+
         let mut sphere_shared_buffer = SharedBuffer::with_usages(
             device,
             2_u64.pow(16),
@@ -180,7 +179,7 @@ impl FluidRenderer {
             bytemuck::cast_slice(&sphere.vertices),
             "Sphere Vertices",
         );
-        
+
         let sphere_index_index = sphere_shared_buffer.allocate(
             queue,
             bytemuck::cast_slice(&sphere.indices),
@@ -269,7 +268,11 @@ impl FluidRenderer {
         pass.set_pipeline(&self.particle_pipeline);
         pass.set_bind_group(0, &self.particles_bind_group, &[]);
         pass.set_bind_group(1, globals_bind_group, &[]);
-        pass.set_vertex_buffer(0, self.sphere_shared_buffer.get_slice(self.sphere_vertex_index));
+        pass.set_vertex_buffer(
+            0,
+            self.sphere_shared_buffer
+                .get_slice(self.sphere_vertex_index),
+        );
         pass.set_index_buffer(
             self.sphere_shared_buffer.get_slice(self.sphere_index_index),
             eframe::wgpu::IndexFormat::Uint32,
