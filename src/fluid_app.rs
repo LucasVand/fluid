@@ -10,11 +10,9 @@ use glam::Vec3;
 
 use crate::{
     adjustable::Adjuster,
+    fluid::render::RenderParams,
     fluid_sim::FluidSim,
-    renderer::{
-        render::{Render, RenderParams},
-        utils::box3d::Box3d,
-    },
+    renderer::{render::Render, utils::box3d::Box3d},
 };
 
 pub struct FluidApp {
@@ -31,14 +29,13 @@ pub struct FluidApp {
 
 impl FluidApp {
     pub fn new(cc: &CreationContext<'_>, initial_size: Rect) -> Self {
-        let size = 100.0;
+        let size = 120.0;
+        let bounds = Box3d::from_center(Vec3::new(0.0, 0.0, 0.0), Vec3::new(size, size, size));
+        let count = 3000;
         Self {
             particle_size: 2.0,
-            render: Render::new(cc, 4000),
-            sim: FluidSim::new(
-                10,
-                Box3d::from_center(Vec3::new(0.0, 0.0, 0.0), Vec3::new(size, size, size)),
-            ),
+            render: Render::new(cc, count, bounds),
+            sim: FluidSim::new(count as usize, bounds),
             modifiers_open: false,
             pos: None,
             color_muliplier: 0.005,
@@ -88,7 +85,7 @@ impl App for FluidApp {
 
             self.sim.update(dt);
             self.render
-                .render(&self.sim.particles, RenderParams::new(self));
+                .render(&self.sim.particles, RenderParams::from_app(self));
 
             if ctx.input(|i| i.key_pressed(Key::ArrowRight)) {
                 if !self.sim.running {

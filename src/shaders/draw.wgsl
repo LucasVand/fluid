@@ -1,12 +1,13 @@
-
-@group(0) @binding(0) var<uniform> params: RenderParams; 
+@group(0) @binding(2) var<uniform> params: RenderParams; 
 @group(0) @binding(1) var<storage, read> particles: array<Particle>;
-@group(0) @binding(2) var<uniform> camera: Camera; 
-@group(0) @binding(3) var<uniform> model: mat4x4<f32>; 
+@group(0) @binding(0) var<uniform> model: mat4x4<f32>; 
+@group(1) @binding(0) var<uniform> camera: Camera; 
 
 struct Particle {
     pos: vec3<f32>,
+    _pad: f32,
     vel: vec3<f32>,
+    _pad0: f32,
 }
 
 struct RenderParams {
@@ -14,62 +15,57 @@ struct RenderParams {
     color_offset: f32,
     particle_size: f32,
 }
+
 struct Camera {
     matrix: mat4x4<f32>,
     position: vec3<f32>,
     _pad: f32,
 }
 
-const QUAD: array<vec2<f32>, 4> = array<vec2<f32>, 4>(
-    vec2<f32>(-1.0, -1.0),  // bottom-left
-    vec2<f32>(-1.0, 1.0),   // top-left
-    vec2<f32>(1.0, -1.0),   // bottom-right
-    vec2<f32>(1.0, 1.0),    // top-right
-);
-
 struct VsOut {
     @builtin(position) pos: vec4<f32>,
     @location(0) vel: vec3<f32>,
-    @location(1) local_pos: vec2<f32>,
+    @location(1) world_normal: vec3<f32>,
+    @location(2) world_pos: vec3<f32>,
 }
-struct FsIn {
-    @location(0) vel: vec3<f32>,
-    @location(1) local_pos: vec2<f32>,
-}
+
+const LIGHT_POS: vec3<f32> = vec3<f32>(100.0, 100.0, 100.0);
+const AMBIENT: f32 = 0.4;
 
 @vertex
-fn vs_main(@builtin(vertex_index) v_index: u32, @builtin(instance_index) i_index: u32) -> VsOut {
-    let size: f32 = params.particle_size;
-    let quad_pos = QUAD[v_index];
-
+fn vs_main(
+    @location(0) vertex_pos: vec3<f32>,
+    @location(1) vertex_normal: vec3<f32>,
+    @builtin(instance_index) i_index: u32,
+) -> VsOut {
     let particle = particles[i_index];
-
-    let offset = size * quad_pos;
-    let world_pos = model * vec4(particle.pos + vec3(offset.x, offset.y, 0.0), 1.0);
-
-    let screen_pos = camera.matrix * world_pos;
-
+    let scale = params.particle_size;
+    
+    let scaled_pos = vertex_pos * scale;
+    let world_pos_calc = model * vec4(particle.pos + scaled_pos, 1.0);
+    let screen_pos = camera.matrix * world_pos_calc;
+    
+    let world_normal = normalize((model * vec4(vertex_normal, 0.0)).xyz);
+    
     var out: VsOut;
     out.pos = screen_pos;
     out.vel = particle.vel;
-    out.local_pos = QUAD[v_index];
-
+    out.world_normal = world_normal;
+    out.world_pos = world_pos_calc.xyz;
+    
     return out;
 }
 
-    @fragment
-fn fs_main(in: FsIn) -> @location(0) vec4<f32> {
-
-    let dist = length(in.local_pos);
-
-    if dist > 1.0 {
-        discard;
-    }
+@fragment
+fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
     let vel = -length(in.vel) * params.color_multiplier + params.color_offset;
-
     let rgb = hsv_to_rgb(max(vel, 0.0), 0.7, 0.8);
-
-    return vec4(rgb, 1.0);
+    
+    let light_dir = normalize(LIGHT_POS - in.world_pos);
+    let diffuse = max(0.0, dot(in.world_normal, light_dir));
+    let lighting = AMBIENT + diffuse * (1.0 - AMBIENT);
+    
+    return vec4(rgb * lighting, 1.0);
 }
 
 fn hsv_to_rgb(h: f32, s: f32, v: f32) -> vec3<f32> {

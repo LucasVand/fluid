@@ -18,12 +18,12 @@ pub struct GpuCamera {
     _pad: f32,
 }
 
-const MOVEMENT_AMOUNT: f32 = 0.1;
-const ROTATE_AMOUNT: f32 = 0.1;
+const MOVEMENT_AMOUNT: f32 = 0.2;
+const ROTATE_AMOUNT: f32 = 0.2;
 impl Camera {
     pub fn new() -> Self {
-        let position = Vec3::new(20.0, 0.0, 20.0);
-        let yaw: f32 = -90.0;
+        let position = Vec3::new(-20.0, 0.0, -20.0);
+        let yaw: f32 = 0.0;
         let pitch: f32 = 0.0;
 
         let forwards = Vec3::new(1.0, 0.0, 0.0);
@@ -68,6 +68,32 @@ impl Camera {
 
         self.up = self.right.cross(self.forwards).normalize();
     }
+    pub fn rotate_about(&mut self, d_yaw: f32, d_pitch: f32, point: Vec3) {
+        self.spin(-d_yaw, -d_pitch);
+
+        let c = f32::cos(f32::to_radians(self.yaw));
+        let s = f32::sin(f32::to_radians(self.yaw));
+        let c2 = f32::cos(f32::to_radians(self.pitch));
+        let s2 = f32::sin(f32::to_radians(self.pitch));
+
+        let mut point_dir = point - self.position;
+
+        let distance = point_dir.length();
+
+        point_dir = point_dir.normalize();
+
+        point_dir.x = c * c2;
+        point_dir.z = s * c2;
+        point_dir.y = s2;
+
+        self.position = point;
+        self.position -= point_dir * distance;
+    }
+    pub fn move_towards(&mut self, d: f32, point: Vec3) {
+        let point_dir = (point - self.position).normalize();
+
+        self.position += point_dir * d * MOVEMENT_AMOUNT;
+    }
 
     pub fn walk(&mut self, d_right: f32, d_forwards: f32) {
         // i want to move with the angle too
@@ -83,13 +109,14 @@ impl Camera {
         let c0 = Vec4::new(self.right.x, self.up.x, -self.forwards.x, 0.0);
         let c1 = Vec4::new(self.right.y, self.up.y, -self.forwards.y, 0.0);
         let c2 = Vec4::new(self.right.z, self.up.z, -self.forwards.z, 0.0);
+
         let a: f32 = -self.right.dot(self.position);
         let b: f32 = -self.up.dot(self.position);
         let c: f32 = self.forwards.dot(self.position);
         let c3 = Vec4::new(a, b, c, 1.0);
         let view = Mat4::from_cols(c0, c1, c2, c3);
 
-        let fov_y: f32 = f32::to_radians(60.0);
+        let fov_y: f32 = f32::to_radians(80.0);
         let aspect = 1200.0 / 700.0;
         let z_near = 0.1;
         let z_far = 100.0;

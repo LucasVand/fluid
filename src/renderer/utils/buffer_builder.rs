@@ -22,6 +22,10 @@ impl<'a> BufferBuilder<'a> {
         self.content = Some(bytemuck::bytes_of(contents));
         self
     }
+    pub fn contents_slice(mut self, contents: &'a [u8]) -> Self {
+        self.content = Some(contents);
+        self
+    }
     pub fn size(mut self, size: u64) -> Self {
         self.size = Some(size);
         self

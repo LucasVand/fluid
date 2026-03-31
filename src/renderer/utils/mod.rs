@@ -6,3 +6,5 @@ pub mod generic_shared_buffer;
 pub mod render_pipeline_builder;
 pub mod shared_buffer;
 pub mod texture_builder;
+pub mod icosphere;
+

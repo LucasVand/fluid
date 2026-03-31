@@ -134,6 +134,28 @@ impl FluidSim {
         }
         return particles;
     }
+
+    pub fn create_box_2d(size: usize, bounds: Box3d) -> Vec<Particle> {
+        let mut particles = Vec::new();
+
+        let grid_size = f32::sqrt(size as f32).ceil() as usize;
+
+        let particle_dist = 5.0;
+        let center_offset = (grid_size as f32 * particle_dist) / 2.0;
+        let center = bounds.center() - Vec3::new(center_offset, center_offset, 0.0);
+
+        for i in 0..grid_size {
+            for j in 0..grid_size {
+                if i * grid_size + j < size {
+                    particles.push(Particle::new(
+                        Vec3::new(j as f32 * particle_dist, i as f32 * particle_dist, 0.0) + center,
+                        Vec3::ZERO,
+                    ));
+                }
+            }
+        }
+        return particles;
+    }
     pub fn update_densities(&mut self) {
         let den: Vec<(f32, f32)> = self
             .particles
@@ -164,15 +186,6 @@ impl FluidSim {
 
             part.predicted = part.pos + part.vel * 1.0 / 60.0;
         }
-
-        let mut parts = mem::take(&mut self.particles);
-        for part in parts.iter_mut() {
-            part.pos += part.vel * delta_time;
-            println!("{:?}, {:?}", part.pos, part.vel);
-            self.collide_all_sides(part);
-        }
-        self.particles = parts;
-        return;
 
         self.update_spatial_map();
 

@@ -17,10 +17,18 @@ impl SharedBuffer {
     const ALIGNMENT: u64 = 16; // 16-byte alignment for GPU
 
     pub fn new(device: &Device, size: u64) -> Self {
+        Self::with_usages(
+            device,
+            size,
+            BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::UNIFORM,
+        )
+    }
+
+    pub fn with_usages(device: &Device, size: u64, usages: BufferUsages) -> Self {
         let buffer = device.create_buffer(&BufferDescriptor {
             label: Some("Generic Shared Buffer"),
             size,
-            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::UNIFORM,
+            usage: usages,
             mapped_at_creation: false,
         });
 
@@ -188,6 +196,16 @@ impl SharedBuffer {
     /// Get reference to the underlying GPU buffer
     pub fn get_buffer(&self) -> &Buffer {
         &self.buffer
+    }
+
+    /// Get a buffer slice for an allocation
+    pub fn get_slice(&self, index: u64) -> eframe::wgpu::BufferSlice {
+        let alloc = self
+            .allocations
+            .get(index as usize)
+            .unwrap_or_else(|| panic!("SharedBuffer: allocation index {} out of bounds", index));
+
+        self.buffer.slice(alloc.offset..alloc.offset + alloc.size)
     }
 
     /// Get all allocations (for debugging or iteration)
