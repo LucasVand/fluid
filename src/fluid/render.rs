@@ -26,6 +26,8 @@ struct GpuParticle {
     _pad: f32,
     vel: Vec3,
     _pad0: f32,
+    is_boundry: u32,
+    _pad1: [f32; 3],
 }
 
 #[repr(C)]
@@ -213,6 +215,8 @@ impl FluidRenderer {
                 _pad: 0.0,
                 vel: p.vel,
                 _pad0: 0.0,
+                is_boundry: p.is_boundary as u32,
+                _pad1: [0.0; 3],
             })
             .collect();
 

@@ -8,6 +8,8 @@ struct Particle {
     _pad: f32,
     vel: vec3<f32>,
     _pad0: f32,
+    is_boundry: u32,
+    _pad2: array<f32, 3>,
 }
 
 struct RenderParams {
@@ -27,6 +29,7 @@ struct VsOut {
     @location(0) vel: vec3<f32>,
     @location(1) world_normal: vec3<f32>,
     @location(2) world_pos: vec3<f32>,
+    @location(3) is_boundry: u32,
 }
 
 const LIGHT_POS: vec3<f32> = vec3<f32>(100.0, 100.0, 100.0);
@@ -40,32 +43,38 @@ fn vs_main(
 ) -> VsOut {
     let particle = particles[i_index];
     let scale = params.particle_size;
-    
+
     let scaled_pos = vertex_pos * scale;
     let world_pos_calc = model * vec4(particle.pos + scaled_pos, 1.0);
     let screen_pos = camera.matrix * world_pos_calc;
-    
+
     let world_normal = normalize((model * vec4(vertex_normal, 0.0)).xyz);
-    
+
     var out: VsOut;
     out.pos = screen_pos;
     out.vel = particle.vel;
     out.world_normal = world_normal;
     out.world_pos = world_pos_calc.xyz;
-    
+    out.is_boundry = particle.is_boundry;
+
     return out;
 }
 
 @fragment
 fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
+    var lightness = 1.0;
+    if in.is_boundry == 1 {
+        lightness = 0.0;
+        discard;
+    }
     let vel = -length(in.vel) * params.color_multiplier + params.color_offset;
     let rgb = hsv_to_rgb(max(vel, 0.0), 0.7, 0.8);
-    
+
     let light_dir = normalize(LIGHT_POS - in.world_pos);
     let diffuse = max(0.0, dot(in.world_normal, light_dir));
     let lighting = AMBIENT + diffuse * (1.0 - AMBIENT);
-    
-    return vec4(rgb * lighting, 1.0);
+
+    return vec4(rgb * lighting * lightness, 1.0);
 }
 
 fn hsv_to_rgb(h: f32, s: f32, v: f32) -> vec3<f32> {

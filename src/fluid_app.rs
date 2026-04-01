@@ -25,13 +25,14 @@ pub struct FluidApp {
     pub particle_size: f32,
     pub radius: f32,
     pub strength: f32,
+    pub particle_count: usize,
 }
 
 impl FluidApp {
     pub fn new(cc: &CreationContext<'_>, initial_size: Rect) -> Self {
-        let size = 120.0;
+        let size = 50.0;
         let bounds = Box3d::from_center(Vec3::new(0.0, 0.0, 0.0), Vec3::new(size, size, size));
-        let count = 3000;
+        let count = 2000;
         let sim = FluidSim::new(count as usize, bounds);
         Self {
             particle_size: 2.0,
@@ -43,12 +44,12 @@ impl FluidApp {
             color_offset: 0.63,
             radius: 130.0,
             strength: 120.0,
+            particle_count: count,
         }
     }
     pub fn reset(&mut self) {
         let bounds = self.sim.bounds;
-        let count = self.sim.particles.len();
-        self.sim = FluidSim::new(count, bounds);
+        self.sim = FluidSim::new(self.particle_count, bounds);
     }
 }
 impl App for FluidApp {
@@ -77,6 +78,9 @@ impl App for FluidApp {
         if ctx.input(|i| i.key_pressed(Key::R)) {
             self.reset();
         }
+        if ctx.input(|i| i.key_pressed(Key::D)) {
+            self.sim.debug_pressure_stats();
+        }
 
         self.render.input(ctx);
 
@@ -84,15 +88,17 @@ impl App for FluidApp {
         CentralPanel::default().show(ctx, |ui| {
             let dt = ctx.input(|i| i.unstable_dt);
 
-            self.sim.update(dt);
-            self.sim.update_boundary_density_multiplied(self.sim.boundary_density_multiplier);
+            self.sim.update(1.0 / 120.0);
+            self.sim.update(1.0 / 120.0);
+            self.sim
+                .update_boundary_density_multiplied(self.sim.boundary_density_multiplier);
             self.render
                 .render(&self.sim.particles, RenderParams::from_app(self));
 
             if ctx.input(|i| i.key_pressed(Key::ArrowRight)) {
                 if !self.sim.running {
                     self.sim.start();
-                    self.sim.update(1.0 / 60.0);
+                    self.sim.update(1.0 / 120.0);
                     self.sim.stop();
                 }
             }
@@ -124,7 +130,10 @@ impl App for FluidApp {
                 "Near Pressure Multiplier",
             );
             a.add_drag(&mut self.sim.viscosity_strength, "Viscosity Strength");
-            a.add_drag(&mut self.sim.boundary_density_multiplier, "Boundary Density Multiplier");
+            a.add_drag(
+                &mut self.sim.boundary_density_multiplier,
+                "Boundary Density Multiplier",
+            );
             a.add_drag(&mut self.color_muliplier, "Color Multiplier");
             a.add_float(&mut self.color_offset, 0.0..=1.0, "Color Offset");
             a.add_drag(&mut self.radius, "Force Radius");

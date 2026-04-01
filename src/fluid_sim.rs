@@ -54,25 +54,25 @@ impl FluidSim {
         let smoothing_radius = 40.0;
 
         // Generate and append boundary particles
-        let boundary_spacing = smoothing_radius / 2.0;
+        let boundary_spacing = smoothing_radius / 3.0;
         let mut boundary_parts = Self::generate_boundary_particles(bounds, boundary_spacing);
-        // parts.append(&mut boundary_parts);
+        parts.append(&mut boundary_parts);
 
         let mut s = Self {
             gravity: 250.0,
             spatial_map: SpatialMap::new(smoothing_radius, parts.len()),
             particles: parts,
             bounds,
-            particle_size: 2.0,
+            particle_size: 1.0,
             smoothing_radius: smoothing_radius,
             mass: 1.0,
             gradient_step: 0.001,
-            target_density: 0.014,
-            pressure_multiplier: 1000.0,
-            near_pressure_multiplier: 0.01,
+            target_density: 0.08,
+            pressure_multiplier: 50.0,
+            near_pressure_multiplier: 100.0, // Reduced from 0.01 - 100x smaller with fixed kernels
             running: false,
             viscosity_strength: 100.0,
-            boundary_density_multiplier: 1.3,
+            boundary_density_multiplier: 1.05,
         };
         s.update_spatial_map();
         s.update_densities();
@@ -295,6 +295,7 @@ impl FluidSim {
 
         boundary_particles
     }
+
     pub fn update_densities(&mut self) {
         let den: Vec<(f32, f32)> = self
             .particles
@@ -305,7 +306,9 @@ impl FluidSim {
             .collect();
 
         den.into_iter().enumerate().for_each(|(index, d)| {
-            self.particles[index].density = d;
+            if !self.particles[index].is_boundary {
+                self.particles[index].density = d;
+            }
         });
     }
     pub fn update_spatial_map(&mut self) {
@@ -321,6 +324,7 @@ impl FluidSim {
         for part in self.particles.iter_mut() {
             if part.is_boundary {
                 part.density.0 = density;
+                part.density.1 = density;
             }
         }
     }
@@ -330,13 +334,6 @@ impl FluidSim {
         self.update_boundary_density(boundary_density);
     }
 
-    pub fn set_all_boundary_densities(&mut self, density: f32, near_density: f32) {
-        for part in self.particles.iter_mut() {
-            if part.is_boundary {
-                part.density = (density, near_density);
-            }
-        }
-    }
     pub fn update(&mut self, delta_time: f32) {
         if !self.running {
             return;
@@ -423,19 +420,25 @@ impl FluidSim {
             return 0.0;
         }
 
-        let volume = PI * radius.powi(8) / 4.0;
+        // let volume = PI * radius.powi(6) / 4.0;  // OLD - WRONG
+        let volume = PI * radius.powi(6) / 15.0; // Correct standard normalization
 
         let v: f32 = radius - dist;
-        return v * v * v;
+        return v * v * v / volume;
     }
     fn near_density_smoothing_kernal_derivative(radius: f32, dist: f32) -> f32 {
         if dist >= radius {
             return 0.0;
         }
 
-        let scale = 12.0 / (PI * radius.powi(4));
+        // let scale = 12.0 / (PI * radius.powi(4));  // OLD - WRONG
+        // let v: f32 = radius - dist;
+        // return -45.0 * v * v / scale;
+
+        // d/dr[(h-r)^3 / (π*h^6/15)] = -3(h-r)^2 / (π*h^6/15)
+        let volume = PI * radius.powi(6) / 15.0;
         let v: f32 = radius - dist;
-        return -v * v;
+        return -3.0 * v * v / volume;
     }
     pub fn calculate_density(&self, sample: Vec3) -> (f32, f32) {
         let mut density: f32 = 0.00001;
@@ -475,6 +478,7 @@ impl FluidSim {
         let mut pressure_force = Vec3::ZERO;
         let sample = self.particles[particle_index].predicted;
         let possible = self.spatial_map.get_around(sample);
+        let own_density = self.particles[particle_index].density;
 
         for i in possible {
             let p = &self.particles[i];
@@ -491,8 +495,10 @@ impl FluidSim {
 
             let shared_pressure =
                 self.calculate_shared_pressure(density, self.particles[particle_index].density);
-            pressure_force += shared_pressure.0 * dir * slope * self.mass / density.0;
-            pressure_force += shared_pressure.1 * dir * slope_near * self.mass / density.1;
+            pressure_force +=
+                shared_pressure.0 * dir * slope * self.mass / (density.0 * own_density.0);
+            pressure_force +=
+                shared_pressure.1 * dir * slope_near * self.mass / (density.1 * own_density.1);
         }
 
         return pressure_force;
@@ -572,5 +578,59 @@ impl FluidSim {
     }
     pub fn set_bounds(&mut self, rect: Box3d) {
         self.bounds = rect;
+    }
+
+    pub fn debug_pressure_stats(&self) {
+        let fluid_particles: Vec<_> = self.particles.iter().filter(|p| !p.is_boundary).collect();
+
+        if fluid_particles.is_empty() {
+            println!("No fluid particles!");
+            return;
+        }
+
+        let densities: Vec<f32> = fluid_particles.iter().map(|p| p.density.0).collect();
+        let pressures: Vec<f32> = fluid_particles
+            .iter()
+            .map(|p| self.convert_density_to_pressure(p.density.0, p.density.1).0)
+            .collect();
+        let y_positions: Vec<f32> = fluid_particles.iter().map(|p| p.pos.y).collect();
+
+        let avg_density = densities.iter().sum::<f32>() / densities.len() as f32;
+        let min_density = densities.iter().fold(f32::INFINITY, |a, &b| a.min(b));
+        let max_density = densities.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+
+        let avg_pressure = pressures.iter().sum::<f32>() / pressures.len() as f32;
+        let min_pressure = pressures.iter().fold(f32::INFINITY, |a, &b| a.min(b));
+        let max_pressure = pressures.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+
+        let avg_y = y_positions.iter().sum::<f32>() / y_positions.len() as f32;
+        let min_y = y_positions.iter().fold(f32::INFINITY, |a, &b| a.min(b));
+        let max_y = y_positions.iter().fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+
+        println!("\n=== SPH DEBUG STATS ===");
+        println!(
+            "Density - Target: {:.6}, Actual Avg: {:.6}, Min: {:.6}, Max: {:.6}",
+            self.target_density, avg_density, min_density, max_density
+        );
+        println!(
+            "Density Ratio (Actual/Target): {:.2}x",
+            avg_density / self.target_density
+        );
+        println!(
+            "Pressure - Avg: {:.6}, Min: {:.6}, Max: {:.6}",
+            avg_pressure, min_pressure, max_pressure
+        );
+        println!(
+            "Y Position - Min: {:.2}, Avg: {:.2}, Max: {:.2} (Range: {:.2})",
+            min_y,
+            avg_y,
+            max_y,
+            max_y - min_y
+        );
+        println!(
+            "Gravity: {:.2}, Pressure Multiplier: {:.0}, Near Pressure: {:.4}",
+            self.gravity, self.pressure_multiplier, self.near_pressure_multiplier
+        );
+        println!("========================\n");
     }
 }
