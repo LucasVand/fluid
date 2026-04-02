@@ -5,6 +5,7 @@ use eframe::{
         Vec2, load::SizedTexture,
     },
     epaint::Hsva,
+    wgpu::Device,
 };
 use glam::Vec3;
 
@@ -26,6 +27,7 @@ pub struct FluidApp {
     pub radius: f32,
     pub strength: f32,
     pub particle_count: usize,
+    pub device: Device,
 }
 
 impl FluidApp {
@@ -33,7 +35,9 @@ impl FluidApp {
         let size = 50.0;
         let bounds = Box3d::from_center(Vec3::new(0.0, 0.0, 0.0), Vec3::new(size, size, size));
         let count = 2000;
-        let sim = FluidSim::new(count as usize, bounds);
+        let device = cc.wgpu_render_state.as_ref().unwrap().device.clone();
+
+        let sim = FluidSim::new(cc, count as usize, bounds);
         Self {
             particle_size: 2.0,
             render: Render::new(cc, sim.particles.len() as u64, bounds),
@@ -45,11 +49,13 @@ impl FluidApp {
             radius: 130.0,
             strength: 120.0,
             particle_count: count,
+            device: cc.wgpu_render_state.as_ref().unwrap().device.clone(),
         }
     }
     pub fn reset(&mut self) {
         let bounds = self.sim.bounds;
-        self.sim = FluidSim::new(self.particle_count, bounds);
+
+        self.sim.particles = FluidSim::create_box(2000, bounds);
     }
 }
 impl App for FluidApp {

@@ -1,9 +1,10 @@
 use std::{f32::consts::PI, mem};
 
+use eframe::CreationContext;
 use glam::Vec3;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
-use crate::{renderer::utils::box3d::Box3d, spatial_map::SpatialMap};
+use crate::{renderer::utils::box3d::Box3d, sim::GpuSim, spatial_map::SpatialMap};
 
 pub struct FluidSim {
     pub particles: Vec<Particle>,
@@ -20,13 +21,13 @@ pub struct FluidSim {
     pub gravity: f32,
     pub viscosity_strength: f32,
     pub boundary_density_multiplier: f32,
+    pub gpu: GpuSim,
 }
 
 #[derive(Debug)]
 pub struct Particle {
     pub pos: Vec3,
     pub vel: Vec3,
-    pub property: f32,
     pub density: (f32, f32),
     pub predicted: Vec3,
     pub is_boundary: bool,
@@ -36,7 +37,6 @@ impl Particle {
         Particle {
             pos: pos,
             vel: vel,
-            property: 0.0,
             density: (0.0, 0.0),
             predicted: pos,
             is_boundary: false,
@@ -46,21 +46,35 @@ impl Particle {
 
 impl FluidSim {
     const DAMPING: f32 = 0.7;
-    pub fn new(size: usize, bounds: Box3d) -> FluidSim {
+    pub fn new(cc: &CreationContext<'_>, size: usize, bounds: Box3d) -> FluidSim {
         let mut parts = Self::create_box(size, bounds);
-        for p in parts.iter_mut() {
-            p.property = (f32::cos(p.pos.x * 0.020 - 3.0 + f32::sin(p.pos.y * 0.02)) + 1.0) * 0.5;
-        }
+
         let smoothing_radius = 40.0;
 
         // Generate and append boundary particles
         let boundary_spacing = smoothing_radius / 3.0;
         let mut boundary_parts = Self::generate_boundary_particles(bounds, boundary_spacing);
-        parts.append(&mut boundary_parts);
+        // parts.append(&mut boundary_parts);
 
+        let gpu = GpuSim::new(
+            cc,
+            &parts,
+            0.08,
+            50.0,
+            100.0,
+            40.0,
+            250.0,
+            0.7,
+            (1.0 / 120.0),
+            bounds.min,
+            bounds.max,
+            1.0,
+            100.0,
+        );
 
         let mut s = Self {
-            gravity: 250.0,
+            gpu,
+            gravity: 1.0,
             spatial_map: SpatialMap::new(smoothing_radius, parts.len()),
             particles: parts,
             bounds,
@@ -70,7 +84,7 @@ impl FluidSim {
             gradient_step: 0.001,
             target_density: 0.08,
             pressure_multiplier: 50.0,
-            near_pressure_multiplier: 100.0, // Reduced from 0.01 - 100x smaller with fixed kernels
+            near_pressure_multiplier: 100.0,
             running: false,
             viscosity_strength: 100.0,
             boundary_density_multiplier: 1.05,
@@ -339,6 +353,9 @@ impl FluidSim {
         if !self.running {
             return;
         }
+        self.gpu.update_params_from_sim(&self);
+        self.particles = self.gpu.update(&self.particles, &mut self.spatial_map);
+        return;
         for part in self.particles.iter_mut() {
             // Skip gravity and velocity updates for boundary particles
             if !part.is_boundary {
