@@ -58,6 +58,7 @@ impl FluidSim {
         let mut boundary_parts = Self::generate_boundary_particles(bounds, boundary_spacing);
         parts.append(&mut boundary_parts);
 
+
         let mut s = Self {
             gravity: 250.0,
             spatial_map: SpatialMap::new(smoothing_radius, parts.len()),
