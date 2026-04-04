@@ -49,7 +49,7 @@ impl FluidSim {
     pub fn new(cc: &CreationContext<'_>, size: usize, bounds: Box3d) -> FluidSim {
         let mut parts = Self::create_box(size, bounds);
 
-        let smoothing_radius = 40.0;
+        let smoothing_radius = 15.0;
 
         // Generate and append boundary particles
         let boundary_spacing = smoothing_radius / 3.0;
@@ -62,7 +62,7 @@ impl FluidSim {
             0.08,
             50.0,
             100.0,
-            40.0,
+            smoothing_radius,
             250.0,
             0.7,
             (1.0 / 120.0),
@@ -74,7 +74,7 @@ impl FluidSim {
 
         let mut s = Self {
             gpu,
-            gravity: 1.0,
+            gravity: 250.0,
             spatial_map: SpatialMap::new(smoothing_radius, parts.len()),
             particles: parts,
             bounds,
@@ -83,10 +83,10 @@ impl FluidSim {
             mass: 1.0,
             gradient_step: 0.001,
             target_density: 0.08,
-            pressure_multiplier: 50.0,
-            near_pressure_multiplier: 100.0,
+            pressure_multiplier: 1.0,
+            near_pressure_multiplier: 1.0,
             running: false,
-            viscosity_strength: 100.0,
+            viscosity_strength: 1.0,
             boundary_density_multiplier: 1.05,
         };
         s.update_spatial_map();
@@ -356,16 +356,16 @@ impl FluidSim {
         self.gpu.update_params_from_sim(&self);
         self.particles = self.gpu.update(&self.particles, &mut self.spatial_map);
         return;
-        for part in self.particles.iter_mut() {
-            // Skip gravity and velocity updates for boundary particles
-            if !part.is_boundary {
-                part.vel += Vec3::new(0.0, -1.0, 0.0) * self.gravity * delta_time;
-            }
-
-            part.predicted = part.pos + part.vel * 1.0 / 60.0;
-        }
-
-        self.update_spatial_map();
+        // for part in self.particles.iter_mut() {
+        //     // Skip gravity and velocity updates for boundary particles
+        //     if !part.is_boundary {
+        //         part.vel += Vec3::new(0.0, -1.0, 0.0) * self.gravity * delta_time;
+        //     }
+        //
+        //     part.predicted = part.pos + part.vel * 1.0 / 60.0;
+        // }
+        //
+        // self.update_spatial_map();
 
         self.update_densities();
 

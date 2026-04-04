@@ -93,6 +93,9 @@ impl App for FluidApp {
         // let t = self.create_texture(ctx);
         CentralPanel::default().show(ctx, |ui| {
             let dt = ctx.input(|i| i.unstable_dt);
+            self.sim
+                .spatial_map
+                .update_params(self.sim.smoothing_radius);
 
             self.sim.update(1.0 / 120.0);
             self.sim.update(1.0 / 120.0);

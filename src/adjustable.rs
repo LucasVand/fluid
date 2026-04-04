@@ -34,7 +34,7 @@ impl<'a> Adjuster<'a> {
         let builder = egui::ViewportBuilder::default()
             .with_title("Modifiers")
             .with_position(Pos2::new(0.0, 0.0))
-            .with_inner_size(Vec2::new(200.0, 300.0));
+            .with_inner_size(Vec2::new(200.0, 600.0));
 
         let id = ViewportId::from_hash_of("Modifiers");
         ctx.show_viewport_immediate(id, builder, |ctx, _class| {

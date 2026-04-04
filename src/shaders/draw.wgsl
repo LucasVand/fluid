@@ -30,6 +30,7 @@ struct VsOut {
     @location(1) world_normal: vec3<f32>,
     @location(2) world_pos: vec3<f32>,
     @location(3) is_boundry: u32,
+    @location(4) index: u32,
 }
 
 const LIGHT_POS: vec3<f32> = vec3<f32>(100.0, 100.0, 100.0);
@@ -56,17 +57,24 @@ fn vs_main(
     out.world_normal = world_normal;
     out.world_pos = world_pos_calc.xyz;
     out.is_boundry = particle.is_boundry;
+    out.index = i_index;
 
     return out;
 }
 
 @fragment
 fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
-    var lightness = 1.0;
+
     if in.is_boundry == 1 {
-        lightness = 0.0;
+        return vec4(1.0, 0.0, 0.0, 1.0);
         discard;
     }
+    if in.index == 100 {
+
+        return vec4(0.0, 1.0, 0.0, 1.0);
+    }
+    return vec4(0.0, 0.0, 1.0, 1.0);
+
     let vel = -length(in.vel) * params.color_multiplier + params.color_offset;
     let rgb = hsv_to_rgb(max(vel, 0.0), 0.7, 0.8);
 
@@ -74,7 +82,7 @@ fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
     let diffuse = max(0.0, dot(in.world_normal, light_dir));
     let lighting = AMBIENT + diffuse * (1.0 - AMBIENT);
 
-    return vec4(rgb * lighting * lightness, 1.0);
+    return vec4(rgb * lighting, 1.0);
 }
 
 fn hsv_to_rgb(h: f32, s: f32, v: f32) -> vec3<f32> {

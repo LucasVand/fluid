@@ -8,11 +8,7 @@ pub struct UpdatePositionStage {
 }
 
 impl UpdatePositionStage {
-    pub fn create(
-        device: &Device,
-        particles_buffer: &Buffer,
-        params_buffer: &Buffer,
-    ) -> Self {
+    pub fn create(device: &Device, particles_buffer: &Buffer, params_buffer: &Buffer) -> Self {
         let bind_group_layout = BindGroupLayoutBuilder::new(device)
             .buffer(0, ShaderStages::COMPUTE, false)
             .uniform(1, ShaderStages::COMPUTE)

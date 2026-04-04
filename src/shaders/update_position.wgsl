@@ -43,7 +43,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     var particle = particles[idx];
     let half_size = params.particle_size * 0.5;
-    particle.velocity += vec3(0.0, -1.0, 0.0) * params.gravity;
+
+    // Apply gravity to velocity
+    particle.velocity.y -= params.gravity * (1.0 / 120.0);
 
     particle.position += particle.velocity * params.time_step;
 

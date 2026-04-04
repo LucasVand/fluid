@@ -10,10 +10,14 @@ use glam::{Mat4, Vec3};
 use crate::{
     fluid::axis_lines::AxisLines,
     fluid_sim::Particle,
-    renderer::utils::{
-        bind_group_builder::BindGroupBuilder, bind_group_layout_builder::BindGroupLayoutBuilder,
-        box3d::Box3d, buffer_builder::BufferBuilder, generic_shared_buffer::SharedBuffer,
-        icosphere::Icosphere, render_pipeline_builder::RenderPipelineBuilder,
+    renderer::{
+        renderable::RenderCC,
+        utils::{
+            bind_group_builder::BindGroupBuilder,
+            bind_group_layout_builder::BindGroupLayoutBuilder, box3d::Box3d,
+            buffer_builder::BufferBuilder, generic_shared_buffer::SharedBuffer,
+            icosphere::Icosphere, render_pipeline_builder::RenderPipelineBuilder,
+        },
     },
 };
 
@@ -73,14 +77,10 @@ pub struct FluidRenderer {
 }
 
 impl FluidRenderer {
-    pub fn new(
-        device: &Device,
-        queue: &eframe::wgpu::Queue,
-        particle_count: u64,
-        texture_format: TextureFormat,
-        bounds: Box3d,
-        global_bind_group_layout: &BindGroupLayout,
-    ) -> Self {
+    pub fn new(rcc: RenderCC, particle_count: u64, bounds: Box3d) -> Self {
+        let device = rcc.device;
+        let queue = rcc.queue;
+
         let mut shared_uniform = SharedBuffer::with_usages(
             device,
             2_u64.pow(13),
@@ -100,16 +100,17 @@ impl FluidRenderer {
         let model_size = mem::size_of::<[[f32; 4]; 4]>() as u64;
         let model_index = shared_uniform.allocate_uniform_empty(model_size, "Model");
 
-        let particles_bind_group_layout = BindGroupLayoutBuilder::new(device)
+        let bgl = BindGroupLayoutBuilder::new(device)
             .buffer(1, ShaderStages::VERTEX_FRAGMENT, true)
             .uniform(0, ShaderStages::VERTEX_FRAGMENT)
             .uniform(2, ShaderStages::VERTEX_FRAGMENT)
+            .uniform(3, ShaderStages::VERTEX_FRAGMENT)
             .build("Particles Buffer Layout");
 
         let particle_pipeline = RenderPipelineBuilder::new(device)
             .shader(include_str!("../shaders/draw.wgsl"), "Draw Shader")
             .primitive(PrimitiveTopology::TriangleList)
-            .bind_group_layout(&[&particles_bind_group_layout, global_bind_group_layout])
+            .bind_group_layout(&[&bgl])
             .vertex_entry("vs_main")
             .vertex_buffers(vec![eframe::wgpu::VertexBufferLayout {
                 array_stride: mem::size_of::<crate::renderer::utils::icosphere::SphereVertex>()
@@ -130,10 +131,10 @@ impl FluidRenderer {
             }])
             .depth(TextureFormat::Depth32Float)
             .fragment_entry("fs_main")
-            .color_format(texture_format)
+            .color_format(rcc.texture_format)
             .build("Particle Render Pipeline");
 
-        let particles_bind_group = BindGroupBuilder::new(device, &particles_bind_group_layout)
+        let particles_bind_group = BindGroupBuilder::new(device, &bgl)
             .buffer(1, &particle_buffer)
             .buffer_chunked(
                 0,
@@ -147,6 +148,7 @@ impl FluidRenderer {
                 shared_uniform.get_offset(params_index),
                 shared_uniform.get_buffer(),
             )
+            .buffer(3, rcc.camera_buf)
             .build("Particles Buffer Bind Group");
 
         let wireframe = Wireframe::new(
@@ -155,16 +157,16 @@ impl FluidRenderer {
             texture_format,
             bounds,
             global_bind_group_layout,
-            &particles_bind_group_layout,
+            &bgl,
         );
 
         let axislines = AxisLines::new(
             device,
             queue,
             texture_format,
-            20.0,
+            15.0,
             global_bind_group_layout,
-            &particles_bind_group_layout,
+            &bgl,
         );
 
         // Generate icosphere

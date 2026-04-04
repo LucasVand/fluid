@@ -10,7 +10,8 @@ struct Particle {
     _pad2: f32,
     density: f32,
     near_density: f32,
-    _pad3: vec2<f32>,
+    is_boundry: u32,
+    _pad3: f32,
 }
 
 struct Params {
@@ -99,7 +100,6 @@ fn process_cell_forces(
     if start_index == 0xFFFFFFFFu {
         return;
     }
-    // TODO: yoooo the spacial map look up is wrong because it does not account for the tuple
 
     var i = start_index;
     while i < arrayLength(&spatial_lookup) {
@@ -113,6 +113,7 @@ fn process_cell_forces(
 
         if neighbor_idx != particle_idx {
             let neighbor = particles[neighbor_idx];
+
             let dst = distance(neighbor.predicted_position, particle_pos);
 
             if dst > 0.0 {
@@ -171,6 +172,5 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         }
     }
 
-    particle.velocity += (pressure_force + viscosity_force * params.viscosity_strength) * params.time_step;
-    particles[idx] = particle;
+    particles[idx].velocity += ((pressure_force / particle.density) + viscosity_force * params.viscosity_strength);
 }

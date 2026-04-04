@@ -11,7 +11,7 @@ use eframe::CreationContext;
 use eframe::wgpu::wgt::PollType;
 use eframe::wgpu::*;
 
-pub struct GpuSim {
+pub struct FluidSim {
     pub device: Device,
     pub queue: Queue,
     pub particles_buffer: Buffer,
@@ -26,7 +26,7 @@ pub struct GpuSim {
     pub update_position_stage: UpdatePositionStage,
 }
 
-impl GpuSim {
+impl FluidSim {
     pub fn new(
         cc: &CreationContext<'_>,
         particles: &[Particle],
@@ -81,12 +81,12 @@ impl GpuSim {
             .build("Params Buffer");
 
         let spatial_lookup_buffer = BufferBuilder::new(device)
-            .size((std::mem::size_of::<(usize, usize)>() * particle_count) as u64)
+            .size((std::mem::size_of::<(u32, u32)>() * particle_count) as u64)
             .usages(BufferUsages::STORAGE | BufferUsages::COPY_DST)
             .build("Spatial Lookup Buffer");
 
         let start_indices_buffer = BufferBuilder::new(device)
-            .size((std::mem::size_of::<usize>() * particle_count) as u64)
+            .size((std::mem::size_of::<u32>() * particle_count) as u64)
             .usages(BufferUsages::STORAGE | BufferUsages::COPY_DST)
             .build("Start Indices Buffer");
 
@@ -109,7 +109,7 @@ impl GpuSim {
         let update_position_stage =
             UpdatePositionStage::create(device, &particles_buffer, &params_buffer);
 
-        GpuSim {
+        FluidSim {
             device: state.device.clone(),
             queue: state.queue.clone(),
             particles_buffer,
@@ -181,7 +181,7 @@ impl GpuSim {
             .iter()
             .map(|&idx| {
                 if idx == usize::MAX {
-                    0xFFFFFFFFu32
+                    u32::MAX
                 } else {
                     idx as u32
                 }
@@ -245,7 +245,6 @@ impl GpuSim {
             self.predicted_stage
                 .execute(&mut compute_pass, self.particle_count);
         }
-        self.upload_spatial_map(spatial_map);
 
         let par = self.download_particles();
         par.iter()

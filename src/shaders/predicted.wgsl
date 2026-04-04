@@ -1,13 +1,17 @@
 struct Particle {
     position: vec3<f32>,
     _pad0: f32,
+    //
     predicted_position: vec3<f32>,
     _pad1: f32,
+    //
     velocity: vec3<f32>,
     _pad2: f32,
+    //
     density: f32,
     near_density: f32,
-    _pad3: vec2<f32>,
+    is_boundry: u32,
+    _pad3: f32,
 }
 
 struct Params {
@@ -34,7 +38,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     var particle = particles[idx];
 
-    particle.predicted_position = particle.position + particle.velocity * (1.0 / 120.0);
-
-    particles[idx] = particle;
+    // Calculate predicted position
+    particles[idx].predicted_position = particle.position + particle.velocity * (1.0 / 120.0);
 }
