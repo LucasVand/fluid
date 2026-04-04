@@ -8,11 +8,7 @@ pub struct PredictedPositionStage {
 }
 
 impl PredictedPositionStage {
-    pub fn create(
-        device: &Device,
-        particles_buffer: &Buffer,
-        params_buffer: &Buffer,
-    ) -> Self {
+    pub fn create(device: &Device, particles_buffer: &Buffer, params_buffer: &Buffer) -> Self {
         let bind_group_layout = BindGroupLayoutBuilder::new(device)
             .buffer(0, ShaderStages::COMPUTE, false)
             .uniform(1, ShaderStages::COMPUTE)
@@ -21,7 +17,7 @@ impl PredictedPositionStage {
         let pipeline = ComputePipelineBuilder::new(device)
             .bind_group_layout(&[&bind_group_layout])
             .shader(
-                include_str!("../../shaders/predicted.wgsl"),
+                include_str!("../../../shaders/predicted.wgsl"),
                 "Predicted Position Shader",
             )
             .entry_point("main")

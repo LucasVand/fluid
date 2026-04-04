@@ -4,7 +4,7 @@ use eframe::CreationContext;
 use glam::Vec3;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
-use crate::{renderer::utils::box3d::Box3d, sim::GpuSim, spatial_map::SpatialMap};
+use crate::{renderer::utils::box3d::Box3d, spatial_map::SpatialMap};
 
 pub struct FluidSim {
     pub particles: Vec<Particle>,
@@ -21,7 +21,6 @@ pub struct FluidSim {
     pub gravity: f32,
     pub viscosity_strength: f32,
     pub boundary_density_multiplier: f32,
-    pub gpu: GpuSim,
 }
 
 #[derive(Debug)]
@@ -56,24 +55,7 @@ impl FluidSim {
         let mut boundary_parts = Self::generate_boundary_particles(bounds, boundary_spacing);
         // parts.append(&mut boundary_parts);
 
-        let gpu = GpuSim::new(
-            cc,
-            &parts,
-            0.08,
-            50.0,
-            100.0,
-            smoothing_radius,
-            250.0,
-            0.7,
-            (1.0 / 120.0),
-            bounds.min,
-            bounds.max,
-            1.0,
-            100.0,
-        );
-
         let mut s = Self {
-            gpu,
             gravity: 250.0,
             spatial_map: SpatialMap::new(smoothing_radius, parts.len()),
             particles: parts,
@@ -353,19 +335,16 @@ impl FluidSim {
         if !self.running {
             return;
         }
-        self.gpu.update_params_from_sim(&self);
-        self.particles = self.gpu.update(&self.particles, &mut self.spatial_map);
-        return;
-        // for part in self.particles.iter_mut() {
-        //     // Skip gravity and velocity updates for boundary particles
-        //     if !part.is_boundary {
-        //         part.vel += Vec3::new(0.0, -1.0, 0.0) * self.gravity * delta_time;
-        //     }
-        //
-        //     part.predicted = part.pos + part.vel * 1.0 / 60.0;
-        // }
-        //
-        // self.update_spatial_map();
+        for part in self.particles.iter_mut() {
+            // Skip gravity and velocity updates for boundary particles
+            if !part.is_boundary {
+                part.vel += Vec3::new(0.0, -1.0, 0.0) * self.gravity * delta_time;
+            }
+
+            part.predicted = part.pos + part.vel * 1.0 / 60.0;
+        }
+
+        self.update_spatial_map();
 
         self.update_densities();
 

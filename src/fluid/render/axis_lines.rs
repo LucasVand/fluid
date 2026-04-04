@@ -7,9 +7,16 @@ use eframe::wgpu::{
 };
 use glam::Vec3;
 
-use crate::renderer::utils::{
-    bind_group_builder::BindGroupBuilder, bind_group_layout_builder::BindGroupLayoutBuilder,
-    generic_shared_buffer::SharedBuffer, render_pipeline_builder::RenderPipelineBuilder,
+use crate::{
+    fluid::model_context::FluidModelContext,
+    renderer::{
+        renderable::RenderCC,
+        utils::{
+            bind_group_builder::BindGroupBuilder,
+            bind_group_layout_builder::BindGroupLayoutBuilder, generic_shared_buffer::SharedBuffer,
+            render_pipeline_builder::RenderPipelineBuilder,
+        },
+    },
 };
 
 #[repr(C)]
@@ -25,17 +32,14 @@ pub struct AxisLines {
     line_index_count: u32,
     line_pipeline: eframe::wgpu::RenderPipeline,
     shared_buffer: SharedBuffer,
+    bind_group: BindGroup,
 }
 
 impl AxisLines {
-    pub fn new(
-        device: &Device,
-        queue: &eframe::wgpu::Queue,
-        texture_format: TextureFormat,
-        length: f32,
-        globals_bind_group: &BindGroupLayout,
-        model_bind_group: &BindGroupLayout,
-    ) -> Self {
+    pub fn new(rcc: &RenderCC, mcc: &FluidModelContext, length: f32) -> Self {
+        let device = rcc.device;
+        let queue = rcc.queue;
+
         let mut shared_buffer = SharedBuffer::with_usages(
             device,
             2_u64.pow(16),
@@ -83,13 +87,23 @@ impl AxisLines {
             "Axis Lines Indices",
         );
 
+        let bgl = BindGroupLayoutBuilder::new(device)
+            .uniform(0, ShaderStages::VERTEX_FRAGMENT)
+            .uniform(1, ShaderStages::VERTEX_FRAGMENT)
+            .build("Wireframe Bindgroup Layout");
+
+        let bind_group = BindGroupBuilder::new(device, &bgl)
+            .buffer_slice(0, rcc.camera_buf)
+            .buffer(1, &mcc.model_buf)
+            .build("Wireframe Bindgroup");
+
         let line_pipeline = RenderPipelineBuilder::new(device)
             .shader(
-                include_str!("../shaders/axis_lines.wgsl"),
+                include_str!("../../shaders/axis_lines.wgsl"),
                 "Axis Lines Shader",
             )
             .primitive(PrimitiveTopology::LineList)
-            .bind_group_layout(&[model_bind_group, globals_bind_group])
+            .bind_group_layout(&[&bgl])
             .vertex_entry("vs_main")
             .vertex_buffers(vec![VertexBufferLayout {
                 array_stride: mem::size_of::<ColoredVertex>() as u64,
@@ -109,10 +123,11 @@ impl AxisLines {
             }])
             .depth(TextureFormat::Depth32Float)
             .fragment_entry("fs_main")
-            .color_format(texture_format)
+            .color_format(rcc.texture_format)
             .build("Axis Lines Pipeline");
 
         AxisLines {
+            bind_group: bind_group,
             line_vertex_index,
             line_index_index,
             line_index_count: line_indices.len() as u32,
@@ -121,20 +136,16 @@ impl AxisLines {
         }
     }
 
-    pub fn draw<'a>(
-        &self,
-        pass: &mut RenderPass<'a>,
-        globals_bind_group: &BindGroup,
-        model_bind_group: &BindGroup,
-    ) {
+    pub fn draw(&self, pass: &mut RenderPass) {
         pass.set_pipeline(&self.line_pipeline);
-        pass.set_bind_group(0, model_bind_group, &[]);
-        pass.set_bind_group(1, globals_bind_group, &[]);
+        pass.set_bind_group(0, &self.bind_group, &[]);
+
         pass.set_vertex_buffer(0, self.shared_buffer.get_slice(self.line_vertex_index));
         pass.set_index_buffer(
             self.shared_buffer.get_slice(self.line_index_index),
             eframe::wgpu::IndexFormat::Uint16,
         );
+
         pass.draw_indexed(0..self.line_index_count, 0, 0..1);
     }
 

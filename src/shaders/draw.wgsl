@@ -1,15 +1,19 @@
 @group(0) @binding(2) var<uniform> params: RenderParams; 
 @group(0) @binding(1) var<storage, read> particles: array<Particle>;
 @group(0) @binding(0) var<uniform> model: mat4x4<f32>; 
-@group(1) @binding(0) var<uniform> camera: Camera; 
+@group(0) @binding(3) var<uniform> camera: Camera;
 
 struct Particle {
-    pos: vec3<f32>,
-    _pad: f32,
-    vel: vec3<f32>,
+    position: vec3<f32>,
     _pad0: f32,
+    predicted_position: vec3<f32>,
+    _pad1: f32,
+    velocity: vec3<f32>,
+    _pad2: f32,
+    density: f32,
+    near_density: f32,
     is_boundry: u32,
-    _pad2: array<f32, 3>,
+    _pad3: f32,
 }
 
 struct RenderParams {
@@ -46,14 +50,14 @@ fn vs_main(
     let scale = params.particle_size;
 
     let scaled_pos = vertex_pos * scale;
-    let world_pos_calc = model * vec4(particle.pos + scaled_pos, 1.0);
+    let world_pos_calc = model * vec4(particle.position + scaled_pos, 1.0);
     let screen_pos = camera.matrix * world_pos_calc;
 
     let world_normal = normalize((model * vec4(vertex_normal, 0.0)).xyz);
 
     var out: VsOut;
     out.pos = screen_pos;
-    out.vel = particle.vel;
+    out.vel = particle.velocity;
     out.world_normal = world_normal;
     out.world_pos = world_pos_calc.xyz;
     out.is_boundry = particle.is_boundry;

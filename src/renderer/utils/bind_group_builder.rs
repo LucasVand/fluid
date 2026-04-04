@@ -1,6 +1,6 @@
 use eframe::wgpu::{
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource, Buffer,
-    BufferBinding, BufferSize, Device, Sampler, TextureView,
+    BufferBinding, BufferSize, BufferSlice, Device, Sampler, TextureView,
 };
 
 pub struct BindGroupBuilder<'a> {
@@ -26,6 +26,16 @@ impl<'a> BindGroupBuilder<'a> {
         self.push(BindGroupEntry {
             binding: binding,
             resource: buffer.as_entire_binding(),
+        })
+    }
+    pub fn buffer_slice(self, binding: u32, buffer_slice: BufferSlice<'a>) -> Self {
+        self.push(BindGroupEntry {
+            binding: binding,
+            resource: BindingResource::Buffer(BufferBinding {
+                buffer: buffer_slice.buffer(),
+                offset: buffer_slice.offset(),
+                size: Some(buffer_slice.size()),
+            }),
         })
     }
     pub fn buffer_chunked(self, binding: u32, size: u64, offset: u64, buffer: &'a Buffer) -> Self {

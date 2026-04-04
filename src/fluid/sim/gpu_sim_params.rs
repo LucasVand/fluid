@@ -1,3 +1,4 @@
+use crate::fluid::fluid_params::FluidParams;
 use glam::Vec3;
 
 #[repr(C)]
@@ -21,4 +22,27 @@ pub struct GpuSimParams {
 
     pub bounds_max: Vec3,
     pub _pad1: f32,
+}
+
+impl From<&FluidParams> for GpuSimParams {
+    fn from(value: &FluidParams) -> Self {
+        let params = GpuSimParams {
+            target_density: value.target_density,
+            pressure_multiplier: value.pressure_multiplier,
+            near_pressure_multiplier: value.near_pressure_multiplier,
+            smoothing_radius: value.smoothing_radius,
+            gravity: value.gravity,
+            damping: 0.7,
+            time_step: (1.0 / 120.0),
+            particle_size: value.particle_size,
+            viscosity_strength: value.viscosity_strength,
+            _pad2: [0.0; 3],
+            bounds_min: value.bounds.min,
+            _pad0: 0.0,
+            bounds_max: value.bounds.max,
+            _pad1: 0.0,
+        };
+
+        params
+    }
 }

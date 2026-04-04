@@ -2,21 +2,21 @@ use std::mem;
 
 use bytemuck::{Pod, Zeroable};
 use eframe::wgpu::{
-    BindGroup, BindGroupLayout, Buffer, BufferUsages, Device, PrimitiveTopology, Queue, RenderPass,
-    ShaderStages, TextureFormat,
+    BindGroup, BufferUsages, PrimitiveTopology, Queue, RenderPass, ShaderStages, TextureFormat,
 };
-use glam::{Mat4, Vec3};
+use glam::Vec3;
 
 use crate::{
-    fluid::axis_lines::AxisLines,
-    fluid_sim::Particle,
+    fluid::{
+        fluid_params::FluidParams, model_context::FluidModelContext, render::axis_lines::AxisLines,
+    },
     renderer::{
         renderable::RenderCC,
         utils::{
             bind_group_builder::BindGroupBuilder,
             bind_group_layout_builder::BindGroupLayoutBuilder, box3d::Box3d,
-            buffer_builder::BufferBuilder, generic_shared_buffer::SharedBuffer,
-            icosphere::Icosphere, render_pipeline_builder::RenderPipelineBuilder,
+            generic_shared_buffer::SharedBuffer, icosphere::Icosphere,
+            render_pipeline_builder::RenderPipelineBuilder,
         },
     },
 };
@@ -37,36 +37,25 @@ struct GpuParticle {
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
 pub struct RenderParams {
-    color_multiplier: f32,
-    color_offset: f32,
-    particle_size: f32,
+    pub color_multiplier: f32,
+    pub color_offset: f32,
+    pub particle_size: f32,
 }
-
-impl RenderParams {
-    pub fn new(color_multiplier: f32, color_offset: f32, particle_size: f32) -> RenderParams {
+impl From<&FluidParams> for RenderParams {
+    fn from(value: &FluidParams) -> Self {
         RenderParams {
-            color_multiplier,
-            color_offset,
-            particle_size,
-        }
-    }
-
-    pub fn from_app(app: &crate::fluid_app::FluidApp) -> RenderParams {
-        RenderParams {
-            color_multiplier: app.color_muliplier,
-            color_offset: app.color_offset,
-            particle_size: app.particle_size,
+            color_multiplier: value.color_multiplier,
+            color_offset: value.color_offset,
+            particle_size: value.particle_size,
         }
     }
 }
 
 pub struct FluidRenderer {
-    particle_buffer: Buffer,
     particles_bind_group: BindGroup,
     particle_pipeline: eframe::wgpu::RenderPipeline,
     particle_count: u64,
     params_index: u64,
-    model_index: u64,
     shared_uniform: SharedBuffer,
     wireframe: Wireframe,
     axis: AxisLines,
@@ -74,12 +63,14 @@ pub struct FluidRenderer {
     sphere_vertex_index: u64,
     sphere_index_index: u64,
     sphere_index_count: u32,
+    queue: Queue,
 }
 
 impl FluidRenderer {
-    pub fn new(rcc: RenderCC, particle_count: u64, bounds: Box3d) -> Self {
+    pub fn new(rcc: &RenderCC, mcc: &FluidModelContext) -> Self {
         let device = rcc.device;
         let queue = rcc.queue;
+        let particle_count = mcc.particles.len() as u64;
 
         let mut shared_uniform = SharedBuffer::with_usages(
             device,
@@ -87,18 +78,13 @@ impl FluidRenderer {
             BufferUsages::STORAGE | BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         );
 
-        let particle_size = mem::size_of::<GpuParticle>() as u64;
-        let particle_buffer = BufferBuilder::new(device)
-            .usages(BufferUsages::STORAGE | BufferUsages::COPY_DST)
-            .size(particle_count * particle_size)
-            .build("Particles Buffer");
-
         let render_params_size = mem::size_of::<RenderParams>() as u64;
-        let params_index =
-            shared_uniform.allocate_uniform_empty(render_params_size, "Render Params");
-
-        let model_size = mem::size_of::<[[f32; 4]; 4]>() as u64;
-        let model_index = shared_uniform.allocate_uniform_empty(model_size, "Model");
+        let render_params: RenderParams = (&mcc.params).into();
+        let params_index = shared_uniform.allocate_uniform(
+            queue,
+            &bytemuck::bytes_of(&render_params),
+            "Render Params",
+        );
 
         let bgl = BindGroupLayoutBuilder::new(device)
             .buffer(1, ShaderStages::VERTEX_FRAGMENT, true)
@@ -108,7 +94,7 @@ impl FluidRenderer {
             .build("Particles Buffer Layout");
 
         let particle_pipeline = RenderPipelineBuilder::new(device)
-            .shader(include_str!("../shaders/draw.wgsl"), "Draw Shader")
+            .shader(include_str!("../../shaders/draw.wgsl"), "Draw Shader")
             .primitive(PrimitiveTopology::TriangleList)
             .bind_group_layout(&[&bgl])
             .vertex_entry("vs_main")
@@ -135,39 +121,20 @@ impl FluidRenderer {
             .build("Particle Render Pipeline");
 
         let particles_bind_group = BindGroupBuilder::new(device, &bgl)
-            .buffer(1, &particle_buffer)
-            .buffer_chunked(
-                0,
-                model_size,
-                shared_uniform.get_offset(model_index),
-                shared_uniform.get_buffer(),
-            )
+            .buffer(1, &mcc.particles_buf)
+            .buffer(0, &mcc.model_buf)
             .buffer_chunked(
                 2,
                 render_params_size,
                 shared_uniform.get_offset(params_index),
                 shared_uniform.get_buffer(),
             )
-            .buffer(3, rcc.camera_buf)
+            .buffer_slice(3, rcc.camera_buf)
             .build("Particles Buffer Bind Group");
 
-        let wireframe = Wireframe::new(
-            device,
-            queue,
-            texture_format,
-            bounds,
-            global_bind_group_layout,
-            &bgl,
-        );
+        let wireframe = Wireframe::new(rcc, mcc);
 
-        let axislines = AxisLines::new(
-            device,
-            queue,
-            texture_format,
-            15.0,
-            global_bind_group_layout,
-            &bgl,
-        );
+        let axislines = AxisLines::new(rcc, mcc, 15.0);
 
         // Generate icosphere
         let sphere = Icosphere::new(2); // 2 subdivisions = smooth sphere
@@ -193,13 +160,12 @@ impl FluidRenderer {
         let sphere_index_count = sphere.indices.len() as u32;
 
         FluidRenderer {
+            queue: rcc.queue.clone(),
             axis: axislines,
-            particle_buffer,
             particles_bind_group,
             particle_pipeline,
             particle_count,
             params_index,
-            model_index,
             shared_uniform,
             wireframe,
             sphere_shared_buffer,
@@ -208,72 +174,16 @@ impl FluidRenderer {
             sphere_index_count,
         }
     }
-
-    pub fn update_particles(&self, queue: &Queue, particles: &[Particle], params: RenderParams) {
-        let gpu_particles: Vec<GpuParticle> = particles
-            .iter()
-            .map(|p| GpuParticle {
-                pos: p.pos,
-                _pad: 0.0,
-                vel: p.vel,
-                _pad0: 0.0,
-                is_boundry: p.is_boundary as u32,
-                _pad1: [0.0; 3],
-            })
-            .collect();
-
-        queue.write_buffer(
-            &self.particle_buffer,
-            0,
-            bytemuck::cast_slice(&gpu_particles),
-        );
-
-        queue.write_buffer(
-            self.shared_uniform.get_buffer(),
-            self.shared_uniform.get_offset(self.params_index),
-            bytemuck::bytes_of(&params),
-        );
-
-        self.update_model(queue, Self::model_matrix(Vec3::ZERO, Vec3::ZERO, 0.1));
-    }
-    pub fn model_matrix(pos: Vec3, rotation: Vec3, scale: f32) -> [[f32; 4]; 4] {
-        // Cube position, rotation, and scale
-        let position = pos;
-        let rotation = rotation;
-        let scale = Vec3::splat(scale);
-
-        // Translation
-        let translate = Mat4::from_translation(position);
-
-        // Rotation (yaw, pitch, roll)
-        let rotate = Mat4::from_rotation_y(rotation.y)
-            * Mat4::from_rotation_x(rotation.x)
-            * Mat4::from_rotation_z(rotation.z);
-
-        // Scale
-        let scale = Mat4::from_scale(scale);
-
-        // Combine to get model matrix
-        let model = translate * rotate * scale;
-        return model.to_cols_array_2d();
+    pub fn update_params(&self, params: &FluidParams) {
+        let new: RenderParams = params.into();
+        self.shared_uniform
+            .update(&self.queue, self.params_index, bytemuck::bytes_of(&new));
     }
 
-    pub fn update_model(&self, queue: &Queue, model_matrix: [[f32; 4]; 4]) {
-        queue.write_buffer(
-            self.shared_uniform.get_buffer(),
-            self.shared_uniform.get_offset(self.model_index),
-            bytemuck::bytes_of(&model_matrix),
-        );
-    }
-
-    pub fn draw_particles<'a>(
-        &'a self,
-        pass: &mut RenderPass<'a>,
-        globals_bind_group: &'a eframe::wgpu::BindGroup,
-    ) {
+    pub fn draw_particles(&self, pass: &mut RenderPass) {
         pass.set_pipeline(&self.particle_pipeline);
         pass.set_bind_group(0, &self.particles_bind_group, &[]);
-        pass.set_bind_group(1, globals_bind_group, &[]);
+
         pass.set_vertex_buffer(
             0,
             self.sphere_shared_buffer
@@ -285,13 +195,7 @@ impl FluidRenderer {
         );
         pass.draw_indexed(0..self.sphere_index_count, 0, 0..self.particle_count as u32);
 
-        self.wireframe
-            .draw(pass, globals_bind_group, &self.particles_bind_group);
-        self.axis
-            .draw(pass, globals_bind_group, &self.particles_bind_group);
-    }
-
-    pub fn update_bounds(&mut self, queue: &Queue, bounds: Box3d) {
-        self.wireframe.update_bounds(queue, bounds);
+        self.wireframe.draw(pass);
+        self.axis.draw(pass);
     }
 }

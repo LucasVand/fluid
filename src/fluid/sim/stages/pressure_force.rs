@@ -25,7 +25,7 @@ impl PressureForceStage {
         let pipeline = ComputePipelineBuilder::new(device)
             .bind_group_layout(&[&bind_group_layout])
             .shader(
-                include_str!("../../shaders/pressure_force.wgsl"),
+                include_str!("../../../shaders/pressure_force.wgsl"),
                 "Pressure Force Shader",
             )
             .entry_point("main")

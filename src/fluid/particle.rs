@@ -1,4 +1,3 @@
-use crate::fluid_sim::Particle;
 use glam::Vec3;
 
 #[repr(C)]
@@ -43,5 +42,25 @@ impl From<&GpuParticle> for Particle {
         p.density = (gp.density, gp.near_density);
         p.is_boundary = gp.is_boundry != 0;
         p
+    }
+}
+
+#[derive(Debug)]
+pub struct Particle {
+    pub pos: Vec3,
+    pub vel: Vec3,
+    pub density: (f32, f32),
+    pub predicted: Vec3,
+    pub is_boundary: bool,
+}
+impl Particle {
+    pub fn new(pos: Vec3, vel: Vec3) -> Self {
+        Particle {
+            pos: pos,
+            vel: vel,
+            density: (0.0, 0.0),
+            predicted: pos,
+            is_boundary: false,
+        }
     }
 }

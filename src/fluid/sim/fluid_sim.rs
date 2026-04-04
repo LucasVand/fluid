@@ -1,13 +1,16 @@
 use std::mem;
 
-use crate::fluid_sim::Particle;
+use crate::fluid::fluid_params::FluidParams;
+use crate::fluid::model_context::FluidModelContext;
+use crate::fluid::particle::{GpuParticle, Particle};
+use crate::fluid::sim::gpu_sim_params::GpuSimParams;
+use crate::fluid::sim::stages::density::DensityStage;
+use crate::fluid::sim::stages::predicted_position::PredictedPositionStage;
+use crate::fluid::sim::stages::pressure_force::PressureForceStage;
+use crate::fluid::sim::stages::update_position::UpdatePositionStage;
+use crate::renderer::renderable::{RenderCC, RenderContext};
 use crate::renderer::utils::BufferBuilder;
-use crate::sim::{
-    DensityStage, GpuParticle, GpuSimParams, PredictedPositionStage, PressureForceStage,
-    UpdatePositionStage,
-};
 use crate::spatial_map::SpatialMap;
-use eframe::CreationContext;
 use eframe::wgpu::wgt::PollType;
 use eframe::wgpu::*;
 
@@ -24,57 +27,20 @@ pub struct FluidSim {
     pub density_stage: DensityStage,
     pub pressure_force_stage: PressureForceStage,
     pub update_position_stage: UpdatePositionStage,
+    pub spatial_map: SpatialMap,
 }
 
 impl FluidSim {
-    pub fn new(
-        cc: &CreationContext<'_>,
-        particles: &[Particle],
-        target_density: f32,
-        pressure_multiplier: f32,
-        near_pressure_multiplier: f32,
-        smoothing_radius: f32,
-        gravity: f32,
-        damping: f32,
-        time_step: f32,
-        bounds_min: glam::Vec3,
-        bounds_max: glam::Vec3,
-        particle_size: f32,
-        viscosity_strength: f32,
-    ) -> Self {
-        let state = cc.wgpu_render_state.as_ref().unwrap();
-        let device = &state.device;
-        let particle_count = particles.len();
-
-        let particles_buffer = BufferBuilder::new(device)
-            .contents_slice(bytemuck::cast_slice(&Self::from_cpu_particles(particles)))
-            .usages(BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST)
-            .build("Particles Buffer");
+    pub fn new(rcc: &RenderCC, mcc: &FluidModelContext) -> Self {
+        let device = rcc.device;
+        let particle_count = mcc.particles.len();
 
         let particles_staging = BufferBuilder::new(device)
             .size((std::mem::size_of::<GpuParticle>() * particle_count) as u64)
             .usages(BufferUsages::COPY_DST | BufferUsages::MAP_READ)
             .build("Particles Staging Buffer");
 
-        let params = GpuSimParams {
-            target_density,
-            pressure_multiplier,
-            near_pressure_multiplier,
-            smoothing_radius,
-            gravity,
-            damping,
-            time_step,
-            particle_size,
-            viscosity_strength,
-            _pad2: [0.0; 3],
-            bounds_min,
-            _pad0: 0.0,
-            bounds_max,
-            _pad1: 0.0,
-        };
-        let params_size = mem::size_of::<GpuSimParams>();
-        println!("{}", params_size);
-
+        let params: GpuSimParams = (&mcc.params).into();
         let params_buffer = BufferBuilder::new(device)
             .contents(&params)
             .usages(BufferUsages::UNIFORM | BufferUsages::COPY_DST)
@@ -91,28 +57,28 @@ impl FluidSim {
             .build("Start Indices Buffer");
 
         let predicted_stage =
-            PredictedPositionStage::create(device, &particles_buffer, &params_buffer);
+            PredictedPositionStage::create(device, &mcc.particles_buf, &params_buffer);
         let density_stage = DensityStage::create(
             device,
-            &particles_buffer,
+            &mcc.particles_buf,
             &params_buffer,
             &spatial_lookup_buffer,
             &start_indices_buffer,
         );
         let pressure_force_stage = PressureForceStage::create(
             device,
-            &particles_buffer,
+            &mcc.particles_buf,
             &params_buffer,
             &spatial_lookup_buffer,
             &start_indices_buffer,
         );
         let update_position_stage =
-            UpdatePositionStage::create(device, &particles_buffer, &params_buffer);
+            UpdatePositionStage::create(device, &mcc.particles_buf, &params_buffer);
 
         FluidSim {
-            device: state.device.clone(),
-            queue: state.queue.clone(),
-            particles_buffer,
+            device: device.clone(),
+            queue: rcc.queue.clone(),
+            particles_buffer: mcc.particles_buf.clone(),
             particles_staging,
             params_buffer,
             spatial_lookup_buffer,
@@ -122,48 +88,36 @@ impl FluidSim {
             density_stage,
             pressure_force_stage,
             update_position_stage,
+            spatial_map: SpatialMap::new(mcc.params.smoothing_radius, mcc.particles.len()),
         }
     }
 
-    pub fn from_cpu_particles(particles: &[Particle]) -> Vec<GpuParticle> {
+    fn from_cpu_particles(particles: &[Particle]) -> Vec<GpuParticle> {
         particles.iter().map(GpuParticle::from).collect()
     }
 
-    pub fn to_cpu_particles(gpu_particles: &[GpuParticle]) -> Vec<Particle> {
+    fn to_cpu_particles(gpu_particles: &[GpuParticle]) -> Vec<Particle> {
         gpu_particles.iter().map(Particle::from).collect()
     }
 
-    pub fn update_params_from_sim(&self, sim: &crate::fluid_sim::FluidSim) {
-        let params = GpuSimParams {
-            target_density: sim.target_density,
-            pressure_multiplier: sim.pressure_multiplier,
-            near_pressure_multiplier: sim.near_pressure_multiplier,
-            smoothing_radius: sim.smoothing_radius,
-            gravity: sim.gravity,
-            damping: 0.7,
-            time_step: (1.0 / 120.0),
-            particle_size: sim.particle_size,
-            viscosity_strength: sim.viscosity_strength,
-            _pad2: [0.0; 3],
-            bounds_min: sim.bounds.min,
-            _pad0: 0.0,
-            bounds_max: sim.bounds.max,
-            _pad1: 0.0,
-        };
+    pub fn update_params(&self, params: &FluidParams) {
+        let params: GpuSimParams = params.into();
 
         self.queue
             .write_buffer(&self.params_buffer, 0, bytemuck::bytes_of(&params));
     }
 
-    pub fn upload_particles(&self, gpu_particles: &[GpuParticle]) {
+    pub fn upload_particles(&self, particles: &[Particle]) {
+        let gpu_particles: Vec<GpuParticle> = particles.iter().map(GpuParticle::from).collect();
+
         self.queue.write_buffer(
             &self.particles_buffer,
             0,
-            bytemuck::cast_slice(gpu_particles),
+            bytemuck::cast_slice(&gpu_particles),
         );
     }
 
-    pub fn upload_spatial_map(&self, spatial_map: &SpatialMap) {
+    fn upload_spatial_map(&self, spatial_map: &SpatialMap) {
         let lookup_u32s: Vec<u32> = spatial_map
             .spacial_lookup
             .iter()
@@ -195,7 +149,7 @@ impl FluidSim {
         );
     }
 
-    pub fn download_particles(&self) -> Vec<GpuParticle> {
+    fn download_particles(&self) -> Vec<GpuParticle> {
         let mut command_encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
@@ -226,9 +180,8 @@ impl FluidSim {
         particles
     }
 
-    pub fn update(&self, particles: &[Particle], spatial_map: &mut SpatialMap) -> Vec<Particle> {
-        let gpu_particles = Self::from_cpu_particles(particles);
-        self.upload_particles(&gpu_particles);
+    pub fn update(&mut self, rc: &RenderContext, mcc: &mut FluidModelContext) {
+        self.upload_particles(&mcc.particles);
 
         let mut command_encoder = self
             .device
@@ -246,18 +199,13 @@ impl FluidSim {
                 .execute(&mut compute_pass, self.particle_count);
         }
 
-        let par = self.download_particles();
-        par.iter()
-            .map(|p| {
-                let particle: Particle = p.into();
-                particle
-            })
-            .enumerate()
-            .for_each(|(i, p)| {
-                spatial_map.insert(i, p.pos);
-            });
-        spatial_map.finalize();
-        self.upload_spatial_map(spatial_map);
+        let par: Vec<GpuParticle> = self.download_particles();
+
+        par.iter().enumerate().for_each(|(i, p)| {
+            self.spatial_map.insert(i, p.position);
+        });
+        self.spatial_map.finalize();
+        self.upload_spatial_map(&self.spatial_map);
 
         {
             let mut compute_pass = command_encoder.begin_compute_pass(&ComputePassDescriptor {
@@ -289,9 +237,11 @@ impl FluidSim {
                 .execute(&mut compute_pass, self.particle_count);
         }
 
-        self.queue.submit(std::iter::once(command_encoder.finish()));
+        self.queue.submit(Some(command_encoder.finish()));
 
         let updated_gpu = self.download_particles();
-        Self::to_cpu_particles(&updated_gpu)
+        let cpu_particles = Self::to_cpu_particles(&updated_gpu);
+
+        mcc.particles = cpu_particles;
     }
 }

@@ -24,7 +24,10 @@ impl DensityStage {
 
         let pipeline = ComputePipelineBuilder::new(device)
             .bind_group_layout(&[&bind_group_layout])
-            .shader(include_str!("../../shaders/density.wgsl"), "Density Shader")
+            .shader(
+                include_str!("../../../shaders/density.wgsl"),
+                "Density Shader",
+            )
             .entry_point("main")
             .build("Density Pipeline");
 

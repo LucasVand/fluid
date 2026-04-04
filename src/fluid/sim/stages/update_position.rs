@@ -17,7 +17,7 @@ impl UpdatePositionStage {
         let pipeline = ComputePipelineBuilder::new(device)
             .bind_group_layout(&[&bind_group_layout])
             .shader(
-                include_str!("../../shaders/update_position.wgsl"),
+                include_str!("../../../shaders/update_position.wgsl"),
                 "Update Position Shader",
             )
             .entry_point("main")

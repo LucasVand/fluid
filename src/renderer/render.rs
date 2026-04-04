@@ -1,9 +1,8 @@
 use std::mem;
 
-use bytemuck::bytes_of;
 use eframe::{
     CreationContext,
-    egui::{Context, Key, TextureId},
+    egui::{Context, Key, TextureId, Ui},
     wgpu::{
         BindGroup, Color, Device, FilterMode, LoadOp, Operations, Queue, RenderPassColorAttachment,
         RenderPassDepthStencilAttachment, RenderPassDescriptor, ShaderStages, StoreOp, Texture,
@@ -13,19 +12,16 @@ use eframe::{
 use glam::{Mat4, Vec3};
 
 use crate::{
-    fluid::render::{FluidRenderer, RenderParams},
     fluid_sim::Particle,
     renderer::{
         camera::{Camera, GpuCamera},
-        utils::{
-            bind_group_builder::BindGroupBuilder,
-            bind_group_layout_builder::BindGroupLayoutBuilder, box3d::Box3d,
-            generic_shared_buffer::SharedBuffer, texture_builder::TextureBuilder,
-        },
+        renderable::{RenderCC, RenderContext, Renderable},
+        utils::{generic_shared_buffer::SharedBuffer, texture_builder::TextureBuilder},
     },
 };
 
 pub struct Render {
+    pub renderables: Vec<Box<dyn Renderable>>,
     queue: Queue,
     device: Device,
 
@@ -37,17 +33,14 @@ pub struct Render {
     shared_uniform: SharedBuffer,
     camera_index: u64,
 
-    globals_bind_group: BindGroup,
-
     pub texture_id: TextureId,
+    texture_format: TextureFormat,
 
     camera: Camera,
-
-    fluid_renderer: FluidRenderer,
 }
 
 impl Render {
-    pub fn new(cc: &CreationContext<'_>, particle_count: u64, bounds: Box3d) -> Self {
+    pub fn new(cc: &CreationContext<'_>) -> Self {
         let state = cc.wgpu_render_state.as_ref().unwrap();
         let device = state.device.clone();
         let queue = state.queue.clone();
@@ -86,51 +79,40 @@ impl Render {
 
         let mut camera = Camera::new();
         camera.rotate_about(0.0, 0.0, Vec3::ZERO);
-        let camera_size = mem::size_of::<GpuCamera>() as u64;
 
         let mut shared_uniform = SharedBuffer::new(&device, 2_u64.pow(13));
         let camera_index =
             shared_uniform.allocate_uniform(&queue, bytemuck::bytes_of(&camera.to_gpu()), "Camera");
 
-        let globals_bind_group_layout = BindGroupLayoutBuilder::new(&device)
-            .uniform(0, ShaderStages::VERTEX_FRAGMENT)
-            .build("Globals Bind Group Layout");
-
-        let globals_bind_group = BindGroupBuilder::new(&device, &globals_bind_group_layout)
-            .buffer_chunked(
-                0,
-                camera_size,
-                shared_uniform.get_offset(camera_index),
-                shared_uniform.get_buffer(),
-            )
-            .build("Globals Bind Group");
-
-        let fluid_renderer = FluidRenderer::new(
-            &device,
-            &queue,
-            particle_count,
-            texture_format,
-            bounds,
-            &globals_bind_group_layout,
-        );
-
         Self {
+            texture_format: texture_format,
             queue,
             device,
             shared_uniform,
             camera_index,
-            globals_bind_group,
             texture_id,
             depth_view,
             depth_texture,
             image_texture,
             image_view,
             camera,
-            fluid_renderer,
+            renderables: Vec::new(),
         }
     }
+    fn get_creation_context(&self) -> RenderCC {
+        RenderCC {
+            device: &self.device,
+            queue: &self.queue,
+            camera_buf: self.shared_uniform.get_slice(self.camera_index),
+            texture_format: self.texture_format,
+        }
+    }
+    pub fn add_renderable<F: FnOnce(RenderCC) -> Box<dyn Renderable>>(&mut self, renderable: F) {
+        self.renderables
+            .push(renderable(self.get_creation_context()));
+    }
 
-    pub fn render(&self, particles: &Vec<Particle>, params: RenderParams) {
+    pub fn render(&mut self, dt: f32, ctx: &Context, ui: &mut Ui) {
         let mut encoder = self.device.create_command_encoder(&Default::default());
 
         {
@@ -157,10 +139,17 @@ impl Render {
                 occlusion_query_set: None,
             });
 
-            self.fluid_renderer
-                .update_particles(&self.queue, particles, params);
-            self.fluid_renderer
-                .draw_particles(&mut pass, &self.globals_bind_group);
+            let rc = RenderContext {
+                device: &self.device,
+                queue: &self.queue,
+                ui: ui,
+                ctx,
+                dt: dt,
+            };
+
+            for renderable in self.renderables.iter_mut() {
+                renderable.render(&mut pass, &rc);
+            }
         }
 
         self.queue.submit(Some(encoder.finish()));
