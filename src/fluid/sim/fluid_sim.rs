@@ -14,6 +14,8 @@ use crate::spatial_map::SpatialMap;
 use eframe::wgpu::wgt::PollType;
 use eframe::wgpu::*;
 
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+
 pub struct FluidSim {
     pub device: Device,
     pub queue: Queue,

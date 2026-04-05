@@ -131,7 +131,7 @@ impl Render {
                     view: &self.depth_view,
                     depth_ops: Some(Operations {
                         load: LoadOp::Clear(1.0),
-                        store: StoreOp::Store,
+                        store: StoreOp::Discard,
                     }),
                     stencil_ops: None,
                 }),

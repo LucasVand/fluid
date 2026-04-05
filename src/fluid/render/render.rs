@@ -8,7 +8,9 @@ use glam::Vec3;
 
 use crate::{
     fluid::{
-        fluid_params::FluidParams, model_context::FluidModelContext, render::axis_lines::AxisLines,
+        fluid_params::FluidParams,
+        model_context::FluidModelContext,
+        render::{axis_lines::AxisLines, spatial_grid::SpatialGrid},
     },
     renderer::{
         renderable::RenderCC,
@@ -64,6 +66,8 @@ pub struct FluidRenderer {
     sphere_index_index: u64,
     sphere_index_count: u32,
     queue: Queue,
+
+    cubes: SpatialGrid,
 }
 
 impl FluidRenderer {
@@ -136,8 +140,11 @@ impl FluidRenderer {
 
         let axislines = AxisLines::new(rcc, mcc, 15.0);
 
+        // remove later
+        let grid = SpatialGrid::new(rcc, mcc, mcc.params.smoothing_radius, 100.0);
+
         // Generate icosphere
-        let sphere = Icosphere::new(2); // 2 subdivisions = smooth sphere
+        let sphere = Icosphere::new(1); // 2 subdivisions = smooth sphere
 
         let mut sphere_shared_buffer = SharedBuffer::with_usages(
             device,
@@ -160,6 +167,7 @@ impl FluidRenderer {
         let sphere_index_count = sphere.indices.len() as u32;
 
         FluidRenderer {
+            cubes: grid,
             queue: rcc.queue.clone(),
             axis: axislines,
             particles_bind_group,
@@ -197,5 +205,6 @@ impl FluidRenderer {
 
         self.wireframe.draw(pass);
         self.axis.draw(pass);
+        // self.cubes.render(pass);
     }
 }

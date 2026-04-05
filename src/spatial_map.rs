@@ -1,4 +1,5 @@
 use glam::Vec3;
+use rayon::slice::ParallelSliceMut;
 
 pub struct SpatialMap {
     pub spacial_lookup: Vec<(usize, usize)>,
@@ -8,9 +9,9 @@ pub struct SpatialMap {
 }
 
 impl SpatialMap {
-    const P1: isize = 15823;
-    const P2: isize = 9739333;
-    const P3: isize = 786433;
+    const P1: i32 = 15823;
+    const P2: i32 = 9739333;
+    const P3: i32 = 786433;
     pub fn new(cell_size: f32, count: usize) -> Self {
         SpatialMap {
             spacial_lookup: vec![(0, 0); count],
@@ -23,8 +24,10 @@ impl SpatialMap {
         self.cell_size = cell_size;
     }
     pub fn coords_to_key(&self, coords: (isize, isize, isize)) -> usize {
-        let hash = Self::P1 * coords.0 + Self::P2 * coords.1 + Self::P3 * coords.2;
-        return hash as usize % self.count;
+        let hash =
+            Self::P1 * coords.0 as i32 + Self::P2 * coords.1 as i32 + Self::P3 * coords.2 as i32;
+
+        return ((hash as u32) % (self.count as u32)) as usize;
     }
     pub fn pos_to_coords(&self, pos: Vec3) -> (isize, isize, isize) {
         let shifted = pos;
@@ -114,7 +117,7 @@ impl SpatialMap {
     }
 
     pub fn finalize(&mut self) {
-        self.spacial_lookup.sort_by_key(|p| {
+        self.spacial_lookup.par_sort_by_key(|p| {
             return p.0;
         });
 

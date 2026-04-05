@@ -70,14 +70,8 @@ fn vs_main(
 fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
 
     if in.is_boundry == 1 {
-        return vec4(1.0, 0.0, 0.0, 1.0);
         discard;
     }
-    if in.index == 100 {
-
-        return vec4(0.0, 1.0, 0.0, 1.0);
-    }
-    return vec4(0.0, 0.0, 1.0, 1.0);
 
     let vel = -length(in.vel) * params.color_multiplier + params.color_offset;
     let rgb = hsv_to_rgb(max(vel, 0.0), 0.7, 0.8);

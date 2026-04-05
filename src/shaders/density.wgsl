@@ -92,9 +92,6 @@ fn process_cell(
             break;
         }
 
-        if particle_idx == 10 {
-            particles[neighbor_idx].is_boundry = 1;
-        }
         if neighbor_idx != particle_idx {
             let neighbor = particles[neighbor_idx];
             let dst = distance(neighbor.predicted_position, particle_pos);
