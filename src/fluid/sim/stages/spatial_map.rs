@@ -67,17 +67,6 @@ impl SpatialMapStage {
             finalize_bind_group,
         }
     }
-    fn encoder(device: &Device) -> CommandEncoder {
-        device.create_command_encoder(&CommandEncoderDescriptor {
-            label: Some("Spatial Map Encoder"),
-        })
-    }
-    fn pass(encoder: &mut CommandEncoder) -> ComputePass<'_> {
-        encoder.begin_compute_pass(&ComputePassDescriptor {
-            label: Some("Spatial Map Pass"),
-            timestamp_writes: None,
-        })
-    }
 
     pub fn execute(&self, pass: &mut ComputePass, particle_count: usize) {
         pass.set_pipeline(&self.pipeline);
@@ -87,11 +76,17 @@ impl SpatialMapStage {
         let n = particle_count;
 
         // sort pass
+        pass.set_bind_group(0, &self.sort_bind_group, &[]);
+        pass.set_pipeline(&self.sort_pipeline);
+
+        let mut seen = std::collections::HashSet::new();
         for k in (2..=n).step_by(2).map(|x| x.next_power_of_two()) {
+            if seen.contains(&k) {
+                continue;
+            }
+            seen.insert(k);
             let mut j = k / 2;
             while j > 0 {
-                pass.set_pipeline(&self.sort_pipeline);
-                pass.set_bind_group(0, &self.sort_bind_group, &[]);
                 pass.set_push_constants(
                     0,
                     bytes_of(&SortParams {

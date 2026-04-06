@@ -31,7 +31,6 @@ pub struct FluidSim {
     pub pressure_force_stage: PressureForceStage,
     pub update_position_stage: UpdatePositionStage,
     pub spatial_map_stage: SpatialMapStage,
-    pub spatial_map: SpatialMap,
 }
 
 impl FluidSim {
@@ -102,7 +101,6 @@ impl FluidSim {
             pressure_force_stage,
             update_position_stage,
             spatial_map_stage,
-            spatial_map: SpatialMap::new(mcc.params.smoothing_radius, mcc.particles.len()),
         }
     }
 

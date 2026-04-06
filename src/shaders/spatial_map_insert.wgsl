@@ -65,7 +65,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
     let particle = particles[idx];
 
-    let key = pos_to_key(particle.position);
+    let key = pos_to_key(particle.predicted_position);
 
     spatial_lookup[idx] = vec2(key, idx);
 }
