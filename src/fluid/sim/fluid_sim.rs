@@ -25,6 +25,7 @@ pub struct FluidSim {
     pub params_buffer: Buffer,
     pub spatial_lookup_buffer: Buffer,
     pub start_indices_buffer: Buffer,
+    pub end_indices_buffer: Buffer,
     pub particle_count: usize,
     pub predicted_stage: PredictedPositionStage,
     pub density_stage: DensityStage,
@@ -58,16 +59,13 @@ impl FluidSim {
             .size((std::mem::size_of::<u32>() * particle_count) as u64)
             .usages(BufferUsages::STORAGE | BufferUsages::COPY_DST)
             .build("Start Indices Buffer");
+        let end_indices_buffer = BufferBuilder::new(device)
+            .size((std::mem::size_of::<u32>() * particle_count) as u64)
+            .usages(BufferUsages::STORAGE | BufferUsages::COPY_DST)
+            .build("Start Indices Buffer");
 
         let predicted_stage =
             PredictedPositionStage::create(device, &mcc.particles_buf, &params_buffer);
-        let density_stage = DensityStage::create(
-            device,
-            &mcc.particles_buf,
-            &params_buffer,
-            &spatial_lookup_buffer,
-            &start_indices_buffer,
-        );
 
         let spatial_map_stage = SpatialMapStage::create(
             device,
@@ -75,6 +73,16 @@ impl FluidSim {
             &params_buffer,
             &spatial_lookup_buffer,
             &start_indices_buffer,
+            &end_indices_buffer,
+        );
+
+        let density_stage = DensityStage::create(
+            device,
+            &mcc.particles_buf,
+            &params_buffer,
+            &spatial_lookup_buffer,
+            &start_indices_buffer,
+            &end_indices_buffer,
         );
 
         let pressure_force_stage = PressureForceStage::create(
@@ -95,6 +103,7 @@ impl FluidSim {
             params_buffer,
             spatial_lookup_buffer,
             start_indices_buffer,
+            end_indices_buffer,
             particle_count,
             predicted_stage,
             density_stage,

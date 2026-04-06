@@ -29,7 +29,6 @@ struct Params {
 @group(0) @binding(0) var<storage, read_write> particles: array<Particle>;
 @group(0) @binding(1) var<uniform> params: Params;
 @group(0) @binding(2) var<storage, read_write> spatial_lookup: array<vec2<u32>>;
-@group(0) @binding(3) var<storage, read_write> start_indices: array<u32>;
 
 fn hash_coords(c_x: i32, c_y: i32, c_z: i32, cell_count: u32) -> u32 {
     let P1: i32 = 15823;

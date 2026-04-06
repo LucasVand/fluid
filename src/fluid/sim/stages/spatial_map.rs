@@ -26,12 +26,12 @@ impl SpatialMapStage {
         params_buffer: &Buffer,
         spatial_lookup_buffer: &Buffer,
         start_indices_buffer: &Buffer,
+        end_indices_buffer: &Buffer,
     ) -> Self {
         let bind_group_layout = BindGroupLayoutBuilder::new(device)
             .buffer(0, ShaderStages::COMPUTE, false)
             .uniform(1, ShaderStages::COMPUTE)
             .buffer(2, ShaderStages::COMPUTE, false)
-            .buffer(3, ShaderStages::COMPUTE, false)
             .build("Spatial Map Bind Group Layout");
 
         let pipeline = ComputePipelineBuilder::new(device)
@@ -47,14 +47,17 @@ impl SpatialMapStage {
             .buffer(0, particles_buffer)
             .buffer(1, params_buffer)
             .buffer(2, spatial_lookup_buffer)
-            .buffer(3, start_indices_buffer)
             .build("Spatial Map Bind Group");
 
         let (sort_pipeline, sort_bind_group, sort_uniform) =
             Self::sort_pipeline(device, spatial_lookup_buffer, start_indices_buffer);
 
-        let (clear_pipeline, finalize_pipeline, finalize_bind_group) =
-            Self::finalize_pipeline(device, spatial_lookup_buffer, start_indices_buffer);
+        let (clear_pipeline, finalize_pipeline, finalize_bind_group) = Self::finalize_pipeline(
+            device,
+            spatial_lookup_buffer,
+            start_indices_buffer,
+            end_indices_buffer,
+        );
 
         SpatialMapStage {
             pipeline,
@@ -149,10 +152,12 @@ impl SpatialMapStage {
         device: &Device,
         spatial_lookup_buffer: &Buffer,
         start_indices_buffer: &Buffer,
+        end_indices_buffer: &Buffer,
     ) -> (ComputePipeline, ComputePipeline, BindGroup) {
         let bind_group_layout = BindGroupLayoutBuilder::new(device)
             .buffer(0, ShaderStages::COMPUTE, false)
             .buffer(1, ShaderStages::COMPUTE, false)
+            .buffer(2, ShaderStages::COMPUTE, false)
             .build("Spatial Map Finalisze Bind Group Layout");
 
         let pipeline_final = ComputePipelineBuilder::new(device)
@@ -176,6 +181,7 @@ impl SpatialMapStage {
         let bind_group = BindGroupBuilder::new(device, &bind_group_layout)
             .buffer(0, spatial_lookup_buffer)
             .buffer(1, start_indices_buffer)
+            .buffer(2, end_indices_buffer)
             .build("Spatial Map Finalize Bind Group");
 
         (pipeline_clear, pipeline_final, bind_group)

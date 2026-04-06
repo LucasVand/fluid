@@ -14,12 +14,14 @@ impl DensityStage {
         params_buffer: &Buffer,
         spatial_lookup_buffer: &Buffer,
         start_indices_buffer: &Buffer,
+        end_indices_buffer: &Buffer,
     ) -> Self {
         let bind_group_layout = BindGroupLayoutBuilder::new(device)
             .buffer(0, ShaderStages::COMPUTE, false)
             .uniform(1, ShaderStages::COMPUTE)
             .buffer(2, ShaderStages::COMPUTE, true)
             .buffer(3, ShaderStages::COMPUTE, true)
+            .buffer(4, ShaderStages::COMPUTE, true)
             .build("Density Bind Group Layout");
 
         let pipeline = ComputePipelineBuilder::new(device)
@@ -36,6 +38,7 @@ impl DensityStage {
             .buffer(1, params_buffer)
             .buffer(2, spatial_lookup_buffer)
             .buffer(3, start_indices_buffer)
+            .buffer(4, end_indices_buffer)
             .build("Density Bind Group");
 
         DensityStage {
