@@ -195,9 +195,8 @@ fn process_cell(
     }
 
     var i = start_index;
-    while i < cell_count {
+    while i < arrayLength(&spatial_lookup) {
         // for (var i = start_index; i < end_index; i++) {
-
         let lookup_entry = spatial_lookup[i];
         let lookup_cell_key = lookup_entry.x;
         let neighbor_idx = lookup_entry.y;
