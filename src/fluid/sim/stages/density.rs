@@ -48,6 +48,6 @@ impl DensityStage {
     pub fn execute(&self, compute_pass: &mut ComputePass, particle_count: usize) {
         compute_pass.set_pipeline(&self.pipeline);
         compute_pass.set_bind_group(0, &self.bind_group, &[]);
-        compute_pass.dispatch_workgroups(((particle_count as u32 + 127) / 128), 1, 1);
+        compute_pass.dispatch_workgroups(((particle_count as u32 + 63) / 64), 1, 1);
     }
 }

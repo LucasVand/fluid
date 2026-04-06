@@ -7,6 +7,7 @@ use crate::fluid::sim::gpu_sim_params::GpuSimParams;
 use crate::fluid::sim::stages::density::DensityStage;
 use crate::fluid::sim::stages::predicted_position::PredictedPositionStage;
 use crate::fluid::sim::stages::pressure_force::PressureForceStage;
+use crate::fluid::sim::stages::spatial_map::SpatialMapStage;
 use crate::fluid::sim::stages::update_position::UpdatePositionStage;
 use crate::renderer::renderable::{RenderCC, RenderContext};
 use crate::renderer::utils::BufferBuilder;
@@ -29,6 +30,7 @@ pub struct FluidSim {
     pub density_stage: DensityStage,
     pub pressure_force_stage: PressureForceStage,
     pub update_position_stage: UpdatePositionStage,
+    pub spatial_map_stage: SpatialMapStage,
     pub spatial_map: SpatialMap,
 }
 
@@ -67,6 +69,15 @@ impl FluidSim {
             &spatial_lookup_buffer,
             &start_indices_buffer,
         );
+
+        let spatial_map_stage = SpatialMapStage::create(
+            device,
+            &mcc.particles_buf,
+            &params_buffer,
+            &spatial_lookup_buffer,
+            &start_indices_buffer,
+        );
+
         let pressure_force_stage = PressureForceStage::create(
             device,
             &mcc.particles_buf,
@@ -90,16 +101,9 @@ impl FluidSim {
             density_stage,
             pressure_force_stage,
             update_position_stage,
+            spatial_map_stage,
             spatial_map: SpatialMap::new(mcc.params.smoothing_radius, mcc.particles.len()),
         }
-    }
-
-    fn from_cpu_particles(particles: &[Particle]) -> Vec<GpuParticle> {
-        particles.iter().map(GpuParticle::from).collect()
-    }
-
-    fn to_cpu_particles(gpu_particles: &[GpuParticle]) -> Vec<Particle> {
-        gpu_particles.iter().map(Particle::from).collect()
     }
 
     pub fn update_params(&self, params: &FluidParams) {
@@ -116,38 +120,6 @@ impl FluidSim {
             &self.particles_buffer,
             0,
             bytemuck::cast_slice(&gpu_particles),
-        );
-    }
-
-    fn upload_spatial_map(&self, spatial_map: &SpatialMap) {
-        let lookup_u32s: Vec<u32> = spatial_map
-            .spacial_lookup
-            .iter()
-            .flat_map(|(a, b)| vec![*a as u32, *b as u32])
-            .collect();
-
-        self.queue.write_buffer(
-            &self.spatial_lookup_buffer,
-            0,
-            bytemuck::cast_slice(&lookup_u32s),
-        );
-
-        let start_indices_u32: Vec<u32> = spatial_map
-            .start_indices
-            .iter()
-            .map(|&idx| {
-                if idx == usize::MAX {
-                    u32::MAX
-                } else {
-                    idx as u32
-                }
-            })
-            .collect();
-
-        self.queue.write_buffer(
-            &self.start_indices_buffer,
-            0,
-            bytemuck::cast_slice(&start_indices_u32),
         );
     }
 
@@ -183,8 +155,6 @@ impl FluidSim {
     }
 
     pub fn update(&mut self, rc: &RenderContext, mcc: &mut FluidModelContext) {
-        self.upload_particles(&mcc.particles);
-
         let mut command_encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor {
@@ -201,13 +171,15 @@ impl FluidSim {
                 .execute(&mut compute_pass, self.particle_count);
         }
 
-        let par: Vec<GpuParticle> = self.download_particles();
+        {
+            let mut compute_pass = command_encoder.begin_compute_pass(&ComputePassDescriptor {
+                label: Some("Spatial Map Pass"),
+                timestamp_writes: None,
+            });
 
-        par.iter().enumerate().for_each(|(i, p)| {
-            self.spatial_map.insert(i, p.position);
-        });
-        self.spatial_map.finalize();
-        self.upload_spatial_map(&self.spatial_map);
+            self.spatial_map_stage
+                .execute(&mut compute_pass, self.particle_count);
+        }
 
         {
             let mut compute_pass = command_encoder.begin_compute_pass(&ComputePassDescriptor {
@@ -240,10 +212,5 @@ impl FluidSim {
         }
 
         self.queue.submit(Some(command_encoder.finish()));
-
-        let updated_gpu = self.download_particles();
-        let cpu_particles = Self::to_cpu_particles(&updated_gpu);
-
-        mcc.particles = cpu_particles;
     }
 }

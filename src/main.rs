@@ -1,4 +1,10 @@
-use eframe::egui::{Pos2, Rect};
+use std::sync::Arc;
+
+use eframe::{
+    egui::{Pos2, Rect},
+    egui_wgpu::{WgpuConfiguration, WgpuSetup, WgpuSetupCreateNew},
+    wgpu::{DeviceDescriptor, Features, Limits},
+};
 use fluid::fluid_app::FluidApp;
 
 fn main() -> Result<(), eframe::Error> {
@@ -6,6 +12,25 @@ fn main() -> Result<(), eframe::Error> {
 
     let opts = eframe::NativeOptions {
         renderer: eframe::Renderer::Wgpu,
+        wgpu_options: WgpuConfiguration {
+            wgpu_setup: WgpuSetup::CreateNew(WgpuSetupCreateNew {
+                device_descriptor: Arc::new(|_a| {
+                    let features = Features::PUSH_CONSTANTS;
+                    DeviceDescriptor {
+                        required_limits: Limits {
+                            max_push_constant_size: 32,
+                            ..Default::default()
+                        },
+                        label: Some("Custom Descripter"),
+                        required_features: features,
+                        trace: eframe::wgpu::Trace::Off,
+                        ..Default::default()
+                    }
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
         viewport: eframe::egui::ViewportBuilder::default()
             .with_inner_size([initial_size.size().x, initial_size.size().y]),
         ..Default::default()
