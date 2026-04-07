@@ -44,7 +44,8 @@ fn near_density_smoothing_kernel_derivative(radius: f32, dist: f32) -> f32 {
         return 0.0;
     }
     let v = radius - dist;
-    return -3.0 * v * v / (PI * radius * radius * radius * radius * radius * radius / 15.0);
+    let volume = (PI * radius * radius * radius * radius * radius * radius / 15.0);
+    return -3.0 * v * v / volume;
 }
 
 fn viscosity_smoothing_kernel(radius: f32, dist: f32) -> f32 {

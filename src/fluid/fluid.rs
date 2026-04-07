@@ -95,7 +95,7 @@ impl Renderable for Fluid {
 
 impl Fluid {
     pub fn new(rcc: &RenderCC) -> Self {
-        let size = 100.0;
+        let size = 80.0;
         let bounds =
             Box3d::from_center(Vec3::new(0.0, 0.0, 0.0), Vec3::new(size * 2.0, size, size));
 
@@ -108,7 +108,7 @@ impl Fluid {
             .usages(BufferUsages::UNIFORM | BufferUsages::COPY_SRC)
             .build("Model Buf");
 
-        let particles: Vec<Particle> = Self::create_box(2_usize.pow(16), bounds);
+        let particles: Vec<Particle> = Self::create_box(2_usize.pow(15), bounds);
 
         let gpu_particles: Vec<GpuParticle> = particles.iter().map(|p| p.into()).collect();
 
@@ -126,7 +126,7 @@ impl Fluid {
                 smoothing_radius: 15.0,
                 gravity: 250.0,
                 damping: 0.7,
-                time_step: 1.0 / 120.0,
+                time_step: 1.0 / 60.0,
                 particle_size: 2.0,
                 viscosity_strength: 0.8,
                 color_multiplier: 0.008,

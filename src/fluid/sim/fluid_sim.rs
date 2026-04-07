@@ -1,21 +1,17 @@
-use std::mem;
-
 use crate::fluid::fluid_params::FluidParams;
 use crate::fluid::model_context::FluidModelContext;
 use crate::fluid::particle::{GpuParticle, Particle};
 use crate::fluid::sim::gpu_sim_params::GpuSimParams;
 use crate::fluid::sim::stages::density::DensityStage;
+use crate::fluid::sim::stages::indirect::IndirectStage;
 use crate::fluid::sim::stages::predicted_position::PredictedPositionStage;
 use crate::fluid::sim::stages::pressure_force::PressureForceStage;
 use crate::fluid::sim::stages::spatial_map::SpatialMapStage;
 use crate::fluid::sim::stages::update_position::UpdatePositionStage;
 use crate::renderer::renderable::{RenderCC, RenderContext};
 use crate::renderer::utils::BufferBuilder;
-use crate::spatial_map::SpatialMap;
 use eframe::wgpu::wgt::PollType;
 use eframe::wgpu::*;
-
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 pub struct FluidSim {
     pub device: Device,
@@ -32,6 +28,7 @@ pub struct FluidSim {
     pub pressure_force_stage: PressureForceStage,
     pub update_position_stage: UpdatePositionStage,
     pub spatial_map_stage: SpatialMapStage,
+    pub indirect_stage: IndirectStage,
 }
 
 impl FluidSim {
@@ -68,6 +65,18 @@ impl FluidSim {
             .usages(BufferUsages::STORAGE | BufferUsages::COPY_DST)
             .build("End Indices Buffer");
 
+        // TODO: Calculate size based on the dimesions of the bounding box
+        let cell_ranges_size = (std::mem::size_of::<(u32, u32)>() * particle_count) as u64;
+        let cell_ranges_buffer = BufferBuilder::new(device)
+            .size(cell_ranges_size)
+            .usages(BufferUsages::STORAGE | BufferUsages::COPY_DST)
+            .build("Cell Ranges Buffer");
+
+        let indirect_buffer = BufferBuilder::new(device)
+            .size(4 * 4)
+            .usages(BufferUsages::STORAGE)
+            .build("Indirect Buffer");
+
         let predicted_stage =
             PredictedPositionStage::create(device, &mcc.particles_buf, &params_buffer);
 
@@ -78,6 +87,13 @@ impl FluidSim {
             &spatial_lookup_buffer,
             &start_indices_buffer,
             &end_indices_buffer,
+        );
+
+        let indirect_stage = IndirectStage::create(
+            device,
+            &spatial_lookup_buffer,
+            &cell_ranges_buffer,
+            &indirect_buffer,
         );
 
         let density_stage = DensityStage::create(
@@ -114,6 +130,7 @@ impl FluidSim {
             pressure_force_stage,
             update_position_stage,
             spatial_map_stage,
+            indirect_stage,
         }
     }
 
@@ -172,55 +189,29 @@ impl FluidSim {
                 label: Some("Particle Update Encoder"),
             });
 
-        {
-            let mut compute_pass = command_encoder.begin_compute_pass(&ComputePassDescriptor {
-                label: Some("Predicted Position Pass"),
-                timestamp_writes: None,
-            });
+        let mut compute_pass = command_encoder.begin_compute_pass(&ComputePassDescriptor {
+            label: Some("Particle Sim Encoder"),
+            timestamp_writes: None,
+        });
 
-            self.predicted_stage
-                .execute(&mut compute_pass, self.particle_count);
-        }
+        self.predicted_stage
+            .execute(&mut compute_pass, self.particle_count);
 
-        {
-            let mut compute_pass = command_encoder.begin_compute_pass(&ComputePassDescriptor {
-                label: Some("Spatial Map Pass"),
-                timestamp_writes: None,
-            });
+        self.spatial_map_stage
+            .execute(&mut compute_pass, self.particle_count);
 
-            self.spatial_map_stage
-                .execute(&mut compute_pass, self.particle_count);
-        }
+        self.indirect_stage.execute(&mut compute_pass);
 
-        {
-            let mut compute_pass = command_encoder.begin_compute_pass(&ComputePassDescriptor {
-                label: Some("Density Pass"),
-                timestamp_writes: None,
-            });
+        self.density_stage
+            .execute(&mut compute_pass, self.particle_count);
 
-            self.density_stage
-                .execute(&mut compute_pass, self.particle_count);
-        }
+        self.pressure_force_stage
+            .execute(&mut compute_pass, self.particle_count);
 
-        {
-            let mut compute_pass = command_encoder.begin_compute_pass(&ComputePassDescriptor {
-                label: Some("Pressure Force Pass"),
-                timestamp_writes: None,
-            });
+        self.update_position_stage
+            .execute(&mut compute_pass, self.particle_count);
 
-            self.pressure_force_stage
-                .execute(&mut compute_pass, self.particle_count);
-        }
-
-        {
-            let mut compute_pass = command_encoder.begin_compute_pass(&ComputePassDescriptor {
-                label: Some("Update Position Pass"),
-                timestamp_writes: None,
-            });
-
-            self.update_position_stage
-                .execute(&mut compute_pass, self.particle_count);
-        }
+        drop(compute_pass);
 
         self.queue.submit(Some(command_encoder.finish()));
     }
