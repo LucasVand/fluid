@@ -30,21 +30,21 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     var prev_key: u32 = spatial_lookup[0].x;
 
     for (var i: u32 = 0; i < n; i++) {
-        // if count is equal to workgroup size or were at a break between cells
+        // if count is equal to workgroup size or we are at a break between cells
         if count >= workgroup_size || prev_key != spatial_lookup[i].x {
             cell_ranges[current_cell] = vec2(start, i);
             start = i;
             current_cell += 1;
             count = 0;
         }
-
+        count += 1;
         prev_key = spatial_lookup[i].x;
     }
 
     cell_ranges[current_cell] = vec2(start, n);
     current_cell += 1;
 
-    indirectBuffer[0].x = current_cell * workgroup_size;
+    indirectBuffer[0].x = current_cell;
     indirectBuffer[0].y = 1;
     indirectBuffer[0].z = 1;
 }

@@ -1087,6 +1087,7 @@ dependencies = [
  "eframe",
  "fastrand",
  "glam",
+ "pollster",
  "rayon",
 ]
 

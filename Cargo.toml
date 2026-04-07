@@ -8,4 +8,5 @@ bytemuck = "1.25.0"
 eframe = { version = "0.33.3", features = ["wgpu"] }
 fastrand = "2.3.0"
 glam = { version = "0.32.1", features = ["bytemuck"] }
+pollster = "0.4.0"
 rayon = "1.11.0"

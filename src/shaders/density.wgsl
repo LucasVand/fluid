@@ -33,8 +33,10 @@ struct Params {
 @group(0) @binding(2) var<storage, read> spatial_lookup: array<vec2<u32>>;
 @group(0) @binding(3) var<storage, read> start_indices: array<u32>;
 @group(0) @binding(4) var<storage, read> end_indices: array<u32>;
+@group(0) @binding(5) var<storage, read> cell_ranges: array<vec2<u32>>;
 
 var<workgroup> shared_predicted: array<vec3<f32>, 64>;
+var<workgroup> shared_index: array<u32, 64>;
 
 fn smoothing_kernel(radius: f32, dist: f32) -> f32 {
     if dist >= radius {
@@ -82,9 +84,9 @@ fn process_particle(predicted: vec3<f32>, neighbor_predicted: vec3<f32>, density
 }
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invocation_id) local_id: vec3<u32>) {
-    let idx = global_id.x;
-    if idx >= arrayLength(&particles) {
+fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invocation_id) local_id: vec3<u32>, @builtin(workgroup_id) workgroup_id: vec3<u32>) {
+
+    if global_id.x >= arrayLength(&particles) {
         return;
     }
     // TODO: we already have the spatial map sorted so maybe we can use that to imporove our cache locality and load a bunch into workgroup memory
@@ -119,10 +121,18 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
     //         workgroupBarrier();
     //     }
     // }
+
+    let range = cell_ranges[workgroup_id.x];
+
+    let particle_idx = range.x + local_id.x;
+
+    if particle_idx >= range.y {
+        return;
+    }
     var density = 0.00001;
     var near_density = 0.00001;
 
-    let predicted = particles[idx].predicted_position;
+    let predicted = particles[particle_idx].predicted_position;
 
     let cell_count = u32(arrayLength(&start_indices));
     let particle_count = arrayLength(&particles);
@@ -137,18 +147,24 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
                 let neighbor_coords = coords + vec3<i32>(ox, oy, oz);
                 let neighbor_key = hash_coords(neighbor_coords.x, neighbor_coords.y, neighbor_coords.z, cell_count);
 
-                process_cell(neighbor_key, idx, predicted, cell_count, &density, &near_density);
+                process_cell(neighbor_key, particle_idx, predicted, cell_count, &density, &near_density);
 
                 // let start = start_indices[neighbor_key];
                 // let end = end_indices[neighbor_key];
+                // if start == MAX {
+                //     continue;
+                // }
                 //
                 // if start < end {
                 //     for (var i: u32 = start; i < end; i += WORKGROUP_SIZE) {
                 //
-                //         let load_index = spatial_lookup[i].y;
+                //         let spatial_load_index = i + local_id.x;
                 //
-                //         if load_index < end {
-                //             shared_predicted[local_id.x] = particles[load_index].predicted_position;
+                //         if spatial_load_index < end {
+                //             let neighbor_lookup = spatial_lookup[spatial_load_index];
+                //             let neighbor_idx = neighbor_lookup.y;
+                //             shared_predicted[local_id.x] = particles[neighbor_idx].predicted_position;
+                //             shared_index[local_id.x] = neighbor_idx;
                 //         }
                 //
                 //         workgroupBarrier();
@@ -156,6 +172,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
                 //         let chunk_size = min(WORKGROUP_SIZE, end - i);
                 //
                 //         for (var j: u32 = 0; j < chunk_size; j++) {
+                //             if particle_idx == 10 {
+                //                 // particles[shared_index[j]].is_boundry = 1;
+                //             }
                 //             process_particle(predicted, shared_predicted[j], &density, &near_density);
                 //         }
                 //
@@ -166,8 +185,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
         }
     }
 
-    particles[idx].density = density;
-    particles[idx].near_density = near_density;
+    particles[particle_idx].density = density;
+    particles[particle_idx].near_density = near_density;
     // if density == 0.00001 || near_density == 0.00001 {
     //     particles[idx].is_boundry = 1;
     // } else {
@@ -218,3 +237,6 @@ fn process_cell(
     }
 }
 
+fn is_nan(x: f32) -> bool {
+    return x != x;
+}

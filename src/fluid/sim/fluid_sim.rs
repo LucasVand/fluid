@@ -22,6 +22,7 @@ pub struct FluidSim {
     pub spatial_lookup_buffer: Buffer,
     pub start_indices_buffer: Buffer,
     pub end_indices_buffer: Buffer,
+    pub indirect_buffer: Buffer,
     pub particle_count: usize,
     pub predicted_stage: PredictedPositionStage,
     pub density_stage: DensityStage,
@@ -74,7 +75,7 @@ impl FluidSim {
 
         let indirect_buffer = BufferBuilder::new(device)
             .size(4 * 4)
-            .usages(BufferUsages::STORAGE)
+            .usages(BufferUsages::STORAGE | BufferUsages::INDIRECT)
             .build("Indirect Buffer");
 
         let predicted_stage =
@@ -103,6 +104,7 @@ impl FluidSim {
             &spatial_lookup_buffer,
             &start_indices_buffer,
             &end_indices_buffer,
+            &cell_ranges_buffer,
         );
 
         let pressure_force_stage = PressureForceStage::create(
@@ -131,6 +133,7 @@ impl FluidSim {
             update_position_stage,
             spatial_map_stage,
             indirect_stage,
+            indirect_buffer,
         }
     }
 
@@ -203,7 +206,7 @@ impl FluidSim {
         self.indirect_stage.execute(&mut compute_pass);
 
         self.density_stage
-            .execute(&mut compute_pass, self.particle_count);
+            .execute(&mut compute_pass, &self.indirect_buffer);
 
         self.pressure_force_stage
             .execute(&mut compute_pass, self.particle_count);
