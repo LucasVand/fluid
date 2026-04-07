@@ -137,7 +137,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
                 let neighbor_coords = coords + vec3<i32>(ox, oy, oz);
                 let neighbor_key = hash_coords(neighbor_coords.x, neighbor_coords.y, neighbor_coords.z, cell_count);
 
-                // process_cell(neighbor_key, idx, predicted, cell_count, &density, &near_density);
+                process_cell(neighbor_key, idx, predicted, cell_count, &density, &near_density);
 
                 // let start = start_indices[neighbor_key];
                 // let end = end_indices[neighbor_key];
