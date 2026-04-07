@@ -6,11 +6,17 @@
 fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     let i = id.x;
     let n = arrayLength(&spatial_lookup);
-    if i <= 0 || i >= n {
+    if i >= n {
         return;
     }
 
     let lookup = spatial_lookup[i];
+
+    if i == 0 {
+        start_indices[lookup.x] = 0;
+        return;
+    }
+
     let prev = spatial_lookup[i - 1];
 
     if lookup.x != prev.x {

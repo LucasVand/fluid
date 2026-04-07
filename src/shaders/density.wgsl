@@ -137,7 +137,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
                 let neighbor_coords = coords + vec3<i32>(ox, oy, oz);
                 let neighbor_key = hash_coords(neighbor_coords.x, neighbor_coords.y, neighbor_coords.z, cell_count);
 
-                process_cell(neighbor_key, idx, predicted, cell_count, &density, &near_density);
+                // process_cell(neighbor_key, idx, predicted, cell_count, &density, &near_density);
 
                 // let start = start_indices[neighbor_key];
                 // let end = end_indices[neighbor_key];
@@ -194,9 +194,9 @@ fn process_cell(
         return;
     }
 
-    var i = start_index;
-    while i < arrayLength(&spatial_lookup) {
-        // for (var i = start_index; i < end_index; i++) {
+    // var i = start_index;
+    // while i < arrayLength(&spatial_lookup) {
+    for (var i = start_index; i < end_index; i++) {
         let lookup_entry = spatial_lookup[i];
         let lookup_cell_key = lookup_entry.x;
         let neighbor_idx = lookup_entry.y;
@@ -215,8 +215,6 @@ fn process_cell(
             *density += influence;
             *near_density += near_influence;
         }
-
-        i += 1u;
     }
 }
 

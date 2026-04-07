@@ -50,19 +50,23 @@ impl FluidSim {
             .usages(BufferUsages::UNIFORM | BufferUsages::COPY_DST)
             .build("Params Buffer");
 
+        let spatial_lookup_size = (std::mem::size_of::<(u32, u32)>() * particle_count) as u64;
+
         let spatial_lookup_buffer = BufferBuilder::new(device)
-            .size((std::mem::size_of::<(u32, u32)>() * particle_count) as u64)
+            .size(spatial_lookup_size)
             .usages(BufferUsages::STORAGE | BufferUsages::COPY_DST)
             .build("Spatial Lookup Buffer");
 
+        let indices_size = (std::mem::size_of::<u32>() * particle_count) as u64;
         let start_indices_buffer = BufferBuilder::new(device)
-            .size((std::mem::size_of::<u32>() * particle_count) as u64)
+            .size(indices_size)
             .usages(BufferUsages::STORAGE | BufferUsages::COPY_DST)
             .build("Start Indices Buffer");
+
         let end_indices_buffer = BufferBuilder::new(device)
-            .size((std::mem::size_of::<u32>() * particle_count) as u64)
+            .size(indices_size)
             .usages(BufferUsages::STORAGE | BufferUsages::COPY_DST)
-            .build("Start Indices Buffer");
+            .build("End Indices Buffer");
 
         let predicted_stage =
             PredictedPositionStage::create(device, &mcc.particles_buf, &params_buffer);
