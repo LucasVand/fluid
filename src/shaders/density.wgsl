@@ -159,8 +159,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
         }
     }
 
-    particles[particle_idx].density = density;
-    particles[particle_idx].near_density = near_density;
+    if !loader_only {
+        particles[particle_idx].density = density;
+        particles[particle_idx].near_density = near_density;
+    }
 }
 
 fn process_cell(

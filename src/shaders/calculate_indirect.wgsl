@@ -49,3 +49,5 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     indirectBuffer[0].y = 1;
     indirectBuffer[0].z = 1;
 }
+
+

@@ -114,6 +114,8 @@ impl FluidSim {
             &params_buffer,
             &spatial_lookup_buffer,
             &start_indices_buffer,
+            &end_indices_buffer,
+            &cell_ranges_buffer,
         );
         let update_position_stage =
             UpdatePositionStage::create(device, &mcc.particles_buf, &params_buffer);
@@ -201,7 +203,7 @@ impl FluidSim {
                 timestamp_writes: None,
             });
             self.pressure_force_stage
-                .execute(&mut compute_pass, self.particle_count);
+                .execute(&mut compute_pass, &self.indirect_buffer);
         }
 
         {

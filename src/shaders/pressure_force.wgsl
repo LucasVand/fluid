@@ -1,5 +1,8 @@
 const PI = 3.14159265359;
 const MASS = 1.0;
+const WORKGROUP_SIZE: u32 = 64;
+
+const MAX: u32 = 0xFFFFFFFFu;
 
 struct Particle {
     position: vec3<f32>,
@@ -30,6 +33,13 @@ struct Params {
 @group(0) @binding(1) var<uniform> params: Params;
 @group(0) @binding(2) var<storage, read> spatial_lookup: array<vec2<u32>>;
 @group(0) @binding(3) var<storage, read> start_indices: array<u32>;
+@group(0) @binding(4) var<storage, read> end_indices: array<u32>;
+@group(0) @binding(5) var<storage, read> cell_ranges: array<vec2<u32>>;
+
+var<workgroup> shared_predicted: array<vec3<f32>, 64>;
+var<workgroup> shared_velocity: array<vec3<f32>, 64>;
+var<workgroup> shared_near_density: array<f32, 64>;
+var<workgroup> shared_density: array<f32, 64>;
 
 fn smoothing_kernel_derivative(radius: f32, dist: f32) -> f32 {
     if dist >= radius {
@@ -82,84 +92,46 @@ fn get_cell_coords(pos: vec3<f32>) -> vec3<i32> {
     );
 }
 
-fn process_cell_forces(
-    cell_key: u32,
-    particle_idx: u32,
-    particle_pos: vec3<f32>,
-    particle_vel: vec3<f32>,
-    particle_density: f32,
-    particle_near_density: f32,
-    cell_count: u32,
-    pressure_force: ptr<function, vec3<f32>>,
-    viscosity_force: ptr<function, vec3<f32>>
-) {
-    if cell_key >= cell_count {
-        return;
-    }
-
-    let start_index = start_indices[cell_key];
-    if start_index == 0xFFFFFFFFu {
-        return;
-    }
-
-    var i = start_index;
-    while i < arrayLength(&spatial_lookup) {
-        let lookup_entry = spatial_lookup[i];
-        let lookup_cell_key = lookup_entry.x;
-        let neighbor_idx = lookup_entry.y;
-
-        if lookup_cell_key != cell_key {
-            break;
-        }
-
-        if neighbor_idx != particle_idx {
-            let neighbor = particles[neighbor_idx];
-
-            let dst = distance(neighbor.predicted_position, particle_pos);
-
-            if dst > 0.0 {
-                let dir = (neighbor.predicted_position - particle_pos) / dst;
-                let slope = smoothing_kernel_derivative(params.smoothing_radius, dst);
-                let slope_near = near_density_smoothing_kernel_derivative(params.smoothing_radius, dst);
-
-                // Pressure force
-                let neighbor_pressure = convert_density_to_pressure(neighbor.density, neighbor.near_density);
-                let self_pressure = convert_density_to_pressure(particle_density, particle_near_density);
-                let shared_pressure = (neighbor_pressure + self_pressure) * 0.5;
-
-                let density_product = neighbor.density * particle_density;
-                if density_product > 0.00001 {
-                    *pressure_force += shared_pressure.x * dir * slope * MASS / density_product;
-                }
-
-                let near_density_product = neighbor.near_density * particle_near_density;
-                if near_density_product > 0.00001 {
-                    *pressure_force += shared_pressure.y * dir * slope_near * MASS / near_density_product;
-                }
-
-                // Viscosity force
-                let influence = viscosity_smoothing_kernel(params.smoothing_radius, dst);
-                *viscosity_force += (neighbor.velocity - particle_vel) * influence;
-            }
-        }
-
-        i += 1u;
-    }
-}
-
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let idx = global_id.x;
-    if idx >= arrayLength(&particles) {
-        return;
+fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invocation_id) local_id: vec3<u32>, @builtin(workgroup_id) workgroup_id: vec3<u32>) {
+    let range = cell_ranges[workgroup_id.x];
+
+    let lookup_idx = range.x + local_id.x;
+
+    var loader_only: bool;
+    var particle_idx: u32;
+    var predicted: vec3<f32>;
+    var velocity: vec3<f32>;
+    var density: f32;
+    var near_density: f32;
+    var neighbour_count = 0;
+    if lookup_idx >= range.y {
+        loader_only = true;
+
+        let start_spatial_index = spatial_lookup[range.x];
+        predicted = particles[start_spatial_index.y].predicted_position;
+        particle_idx = 0;
+    } else {
+        loader_only = false;
+
+        let lookup = spatial_lookup[lookup_idx];
+
+        particle_idx = lookup.y;
+        let particle = particles[particle_idx];
+
+        predicted = particle.predicted_position;
+        velocity = particle.velocity;
+        density = particle.density;
+        near_density = particle.near_density;
     }
 
-    var particle = particles[idx];
-    var pressure_force = vec3<f32>(0.0);
-    var viscosity_force = vec3<f32>(0.0);
+    var pressure_force = vec3(0.000001);
+    var viscosity_force = vec3(0.0);
 
     let cell_count = u32(arrayLength(&start_indices));
-    let coords = get_cell_coords(particle.predicted_position);
+    let particle_count = arrayLength(&particles);
+
+    let coords = get_cell_coords(predicted);
 
     // Check all 27 neighboring cells
     for (var ox: i32 = -1; ox <= 1; ox += 1) {
@@ -168,10 +140,100 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                 let neighbor_coords = coords + vec3<i32>(ox, oy, oz);
                 let neighbor_key = hash_coords(neighbor_coords.x, neighbor_coords.y, neighbor_coords.z, cell_count);
 
-                process_cell_forces(neighbor_key, idx, particle.predicted_position, particle.velocity, particle.density, particle.near_density, cell_count, &pressure_force, &viscosity_force);
+                let start = start_indices[neighbor_key];
+                let end = end_indices[neighbor_key];
+                if start == MAX {
+                    continue;
+                }
+
+                // if !loader_only {
+                //     process_cell_forces(neighbor_key, particle_idx, predicted, velocity, density, near_density, cell_count, &pressure_force, &viscosity_force);
+                // }
+
+                for (var i: u32 = start; i < end; i += WORKGROUP_SIZE) {
+
+                    let spatial_load_index = i + local_id.x;
+
+                    if spatial_load_index < end {
+                        let neighbor_lookup = spatial_lookup[spatial_load_index];
+                        let neighbor_idx = neighbor_lookup.y;
+                        let neighbor = particles[neighbor_idx];
+
+                        shared_predicted[local_id.x] = neighbor.predicted_position;
+                        shared_near_density[local_id.x] = neighbor.near_density;
+                        shared_density[local_id.x] = neighbor.density;
+                        shared_velocity[local_id.x] = neighbor.velocity;
+                    }
+
+                    workgroupBarrier();
+
+                    let chunk_size = min(WORKGROUP_SIZE, end - i);
+
+                    if !loader_only {
+                        for (var j: u32 = 0; j < chunk_size; j++) {
+                            neighbour_count += 1;
+                            process_particle(&pressure_force,
+                                &viscosity_force,
+                                predicted,
+                                velocity,
+                                density,
+                                near_density,
+                                shared_predicted[j],
+                                shared_velocity[j],
+                                shared_density[j],
+                                shared_near_density[j]);
+                        }
+                    }
+
+                    workgroupBarrier();
+                }
             }
         }
     }
 
-    particles[idx].velocity += ((pressure_force / particle.density) + viscosity_force * params.viscosity_strength);
+    if !loader_only {
+        let inv_density = 1.0 / max(particles[particle_idx].density, 0.001);
+        particles[particle_idx].velocity += ((pressure_force * inv_density) + viscosity_force * params.viscosity_strength);
+        // Airborne drag: damp spray/isolated particles to prevent them flying off
+        if neighbour_count < 8 {
+            let drag = 1.0f - 0.75f * params.time_step;
+            particles[particle_idx].velocity.x *= drag;
+        }
+    }
+}
+
+fn process_particle(pressure_force: ptr<function, vec3<f32>>,
+    viscosity_force: ptr<function, vec3<f32>>,
+    predicted: vec3<f32>,
+    velocity: vec3<f32>,
+    density: f32,
+    near_density: f32,
+    neighbor_predicted: vec3<f32>,
+    neighbor_velocity: vec3<f32>,
+    neighbor_density: f32,
+    neighbor_near_density: f32) {
+
+    let dst = distance(neighbor_predicted, predicted);
+    if dst == 0.0 {
+        return;
+    }
+
+    let dir = (neighbor_predicted - predicted) / dst;
+    let slope = smoothing_kernel_derivative(params.smoothing_radius, dst);
+    let slope_near = near_density_smoothing_kernel_derivative(params.smoothing_radius, dst);
+
+    // Pressure force
+    let neighbor_pressure = convert_density_to_pressure(neighbor_density, neighbor_near_density);
+    let self_pressure = convert_density_to_pressure(density, near_density);
+    let shared_pressure = (neighbor_pressure + self_pressure) * 0.5;
+
+    let density_product = neighbor_density * density;
+    *pressure_force += shared_pressure.x * dir * slope * MASS / density_product;
+
+    let near_density_product = neighbor_near_density * near_density;
+    *pressure_force += shared_pressure.y * dir * slope_near * MASS / near_density_product;
+
+    // Viscosity force
+    let influence = viscosity_smoothing_kernel(params.smoothing_radius, dst);
+    *viscosity_force += (neighbor_velocity - velocity) * influence;
 }

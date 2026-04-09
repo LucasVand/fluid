@@ -96,8 +96,10 @@ impl Renderable for Fluid {
 impl Fluid {
     pub fn new(rcc: &RenderCC) -> Self {
         let size = 80.0;
-        let bounds =
-            Box3d::from_center(Vec3::new(0.0, 0.0, 0.0), Vec3::new(size * 2.0, size, size));
+        let bounds = Box3d::from_center(
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(size * 4.0, size * 1.5, size),
+        );
 
         let model_mat = Fluid::model_matrix(Vec3::ZERO, Vec3::ZERO, 0.1);
 
@@ -120,11 +122,11 @@ impl Fluid {
         let mcc = FluidModelContext {
             particles: particles,
             params: FluidParams {
-                target_density: 0.16,
-                pressure_multiplier: 1.0,
-                near_pressure_multiplier: 10.0,
+                target_density: 0.10,
+                pressure_multiplier: 5.0,
+                near_pressure_multiplier: 5.0,
                 smoothing_radius: 15.0,
-                gravity: 250.0,
+                gravity: 2550.0,
                 damping: 0.7,
                 time_step: 1.0 / 60.0,
                 particle_size: 2.0,
