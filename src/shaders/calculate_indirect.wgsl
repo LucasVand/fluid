@@ -38,6 +38,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
             count = 0;
         }
         count += 1;
+
         prev_key = spatial_lookup[i].x;
     }
 

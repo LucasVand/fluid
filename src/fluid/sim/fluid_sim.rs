@@ -70,12 +70,12 @@ impl FluidSim {
         let cell_ranges_size = (std::mem::size_of::<(u32, u32)>() * particle_count) as u64;
         let cell_ranges_buffer = BufferBuilder::new(device)
             .size(cell_ranges_size)
-            .usages(BufferUsages::STORAGE | BufferUsages::COPY_DST)
+            .usages(BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC)
             .build("Cell Ranges Buffer");
 
         let indirect_buffer = BufferBuilder::new(device)
             .size(4 * 4)
-            .usages(BufferUsages::STORAGE | BufferUsages::INDIRECT)
+            .usages(BufferUsages::STORAGE | BufferUsages::INDIRECT | BufferUsages::COPY_SRC)
             .build("Indirect Buffer");
 
         let predicted_stage =
@@ -95,6 +95,7 @@ impl FluidSim {
             &spatial_lookup_buffer,
             &cell_ranges_buffer,
             &indirect_buffer,
+            particle_count,
         );
 
         let density_stage = DensityStage::create(
@@ -217,5 +218,8 @@ impl FluidSim {
         drop(compute_pass);
 
         self.queue.submit(Some(command_encoder.finish()));
+        let _ = self.device.poll(PollType::wait_indefinitely());
+
+        // self.indirect_stage.debug_print_ranges(&self.queue);
     }
 }

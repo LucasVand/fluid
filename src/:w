@@ -124,25 +124,27 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
                 }
 
                 for (var i: u32 = start; i < end; i += WORKGROUP_SIZE) {
+                    let neighbor = particles[spatial_lookup[i].y].predicted_position;
+                    process_particle(predicted, neighbor, &density, &near_density);
 
-                    let spatial_load_index = i + local_id.x;
-
-                    if spatial_load_index < end {
-                        let neighbor_lookup = spatial_lookup[spatial_load_index];
-                        let neighbor_idx = neighbor_lookup.y;
-                        shared_predicted[local_id.x] = particles[neighbor_idx].predicted_position;
-                        shared_index[local_id.x] = neighbor_idx;
-                    }
-
-                    workgroupBarrier();
-
-                    let chunk_size = min(WORKGROUP_SIZE, end - i);
-
-                    for (var j: u32 = 0; j < chunk_size; j++) {
-                        process_particle(predicted, shared_predicted[j], &density, &near_density);
-                    }
-
-                    workgroupBarrier();
+                    // let spatial_load_index = i + local_id.x;
+                    //
+                    // if spatial_load_index < end {
+                    //     let neighbor_lookup = spatial_lookup[spatial_load_index];
+                    //     let neighbor_idx = neighbor_lookup.y;
+                    //     shared_predicted[local_id.x] = particles[neighbor_idx].predicted_position;
+                    //     shared_index[local_id.x] = neighbor_idx;
+                    // }
+                    //
+                    // workgroupBarrier();
+                    //
+                    // let chunk_size = min(WORKGROUP_SIZE, end - i);
+                    //
+                    // for (var j: u32 = 0; j < chunk_size; j++) {
+                    //     process_particle(predicted, shared_predicted[j], &density, &near_density);
+                    // }
+                    //
+                    // workgroupBarrier();
                 }
             }
         }
