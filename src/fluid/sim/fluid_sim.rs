@@ -155,38 +155,7 @@ impl FluidSim {
         );
     }
 
-    fn download_particles(&self) -> Vec<GpuParticle> {
-        let mut command_encoder = self
-            .device
-            .create_command_encoder(&CommandEncoderDescriptor {
-                label: Some("Particles Readback Encoder"),
-            });
-
-        command_encoder.copy_buffer_to_buffer(
-            &self.particles_buffer,
-            0,
-            &self.particles_staging,
-            0,
-            (std::mem::size_of::<GpuParticle>() * self.particle_count) as u64,
-        );
-
-        self.queue.submit(std::iter::once(command_encoder.finish()));
-
-        let staging_slice = self.particles_staging.slice(..);
-        staging_slice.map_async(MapMode::Read, |_| {});
-
-        let _ = self.device.poll(PollType::wait_indefinitely());
-
-        let data = staging_slice.get_mapped_range();
-        let particles: Vec<GpuParticle> = bytemuck::cast_slice(&data).to_vec();
-
-        drop(data);
-        self.particles_staging.unmap();
-
-        particles
-    }
-
-    pub fn update(&mut self, rc: &RenderContext, mcc: &mut FluidModelContext) {
+    pub fn update(&mut self, _rc: &RenderContext, _mcc: &mut FluidModelContext) {
         let mut encoder = CommandEncoderBuilder::new(&self.device)
             .label("Fluid Simulation")
             .build();

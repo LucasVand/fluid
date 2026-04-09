@@ -2,8 +2,8 @@ use std::mem;
 
 use bytemuck::{Pod, Zeroable};
 use eframe::wgpu::{
-    BindGroup, BindGroupLayout, BufferUsages, Device, PrimitiveTopology, Queue, RenderPass,
-    ShaderStages, TextureFormat, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
+    BindGroup, BufferUsages, PrimitiveTopology, Queue, RenderPass, ShaderStages, TextureFormat,
+    VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
 };
 use glam::Vec3;
 

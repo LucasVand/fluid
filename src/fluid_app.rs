@@ -1,14 +1,10 @@
 use eframe::{
     App, CreationContext,
-    egui::{
-        self, CentralPanel, Color32, CornerRadius, Image, Key, Pos2, Rect, Stroke, StrokeKind,
-        Vec2, load::SizedTexture,
-    },
-    epaint::Hsva,
+    egui::{CentralPanel, Image, Pos2, Rect, load::SizedTexture},
     wgpu::Device,
 };
 
-use crate::{adjustable::Adjuster, fluid::fluid::Fluid, renderer::render::Render};
+use crate::{fluid::fluid::Fluid, renderer::render::Render};
 
 pub struct FluidApp {
     pub render: Render,
@@ -18,7 +14,7 @@ pub struct FluidApp {
 }
 
 impl FluidApp {
-    pub fn new(cc: &CreationContext<'_>, inital_size: Rect) -> Self {
+    pub fn new(cc: &CreationContext<'_>, _inital_size: Rect) -> Self {
         let device = cc.wgpu_render_state.as_ref().unwrap().device.clone();
 
         let mut r = Render::new(cc);
@@ -38,7 +34,7 @@ impl FluidApp {
     }
 }
 impl App for FluidApp {
-    fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &eframe::egui::Context, _frame: &mut eframe::Frame) {
         self.render.input(ctx);
 
         CentralPanel::default().show(ctx, |ui| {

@@ -3,7 +3,7 @@ use eframe::wgpu::{
     DepthStencilState, Device, FragmentState, FrontFace, MultisampleState,
     PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, PrimitiveTopology,
     RenderPipeline, RenderPipelineDescriptor, ShaderModule, ShaderModuleDescriptor, ShaderSource,
-    StencilState, TextureFormat, VertexBufferLayout, VertexState, wgc::device,
+    StencilState, TextureFormat, VertexBufferLayout, VertexState,
 };
 
 pub struct RenderPipelineBuilder<'a> {

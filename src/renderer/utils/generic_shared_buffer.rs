@@ -1,4 +1,4 @@
-use eframe::wgpu::{Buffer, BufferDescriptor, BufferUsages, Device, Queue};
+use eframe::wgpu::{Buffer, BufferDescriptor, BufferSlice, BufferUsages, Device, Queue};
 
 pub struct BufferAllocation {
     pub offset: u64,
@@ -199,7 +199,7 @@ impl SharedBuffer {
     }
 
     /// Get a buffer slice for an allocation
-    pub fn get_slice(&self, index: u64) -> eframe::wgpu::BufferSlice {
+    pub fn get_slice(&self, index: u64) -> BufferSlice<'_> {
         let alloc = self
             .allocations
             .get(index as usize)

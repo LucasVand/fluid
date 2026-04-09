@@ -8,17 +8,14 @@ use glam::Vec3;
 
 use crate::{
     fluid::{
-        fluid_params::FluidParams,
-        model_context::FluidModelContext,
-        render::{axis_lines::AxisLines, spatial_grid::SpatialGrid},
+        fluid_params::FluidParams, model_context::FluidModelContext, render::axis_lines::AxisLines,
     },
     renderer::{
         renderable::RenderCC,
         utils::{
             bind_group_builder::BindGroupBuilder,
-            bind_group_layout_builder::BindGroupLayoutBuilder, box3d::Box3d,
-            generic_shared_buffer::SharedBuffer, icosphere::Icosphere,
-            render_pipeline_builder::RenderPipelineBuilder,
+            bind_group_layout_builder::BindGroupLayoutBuilder, generic_shared_buffer::SharedBuffer,
+            icosphere::Icosphere, render_pipeline_builder::RenderPipelineBuilder,
         },
     },
 };
@@ -66,8 +63,6 @@ pub struct FluidRenderer {
     sphere_index_index: u64,
     sphere_index_count: u32,
     queue: Queue,
-
-    cubes: SpatialGrid,
 }
 
 impl FluidRenderer {
@@ -140,9 +135,6 @@ impl FluidRenderer {
 
         let axislines = AxisLines::new(rcc, mcc, 15.0);
 
-        // remove later
-        let grid = SpatialGrid::new(rcc, mcc, mcc.params.smoothing_radius, 100.0);
-
         // Generate icosphere
         let sphere = Icosphere::new(1); // 2 subdivisions = smooth sphere
 
@@ -167,7 +159,6 @@ impl FluidRenderer {
         let sphere_index_count = sphere.indices.len() as u32;
 
         FluidRenderer {
-            cubes: grid,
             queue: rcc.queue.clone(),
             axis: axislines,
             particles_bind_group,
@@ -205,6 +196,5 @@ impl FluidRenderer {
 
         self.wireframe.draw(pass);
         self.axis.draw(pass);
-        // self.cubes.render(pass);
     }
 }

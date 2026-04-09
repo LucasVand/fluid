@@ -1,4 +1,4 @@
-use std::{fmt::write, mem, ops::Range, slice::Iter};
+use std::{ops::Range, slice::Iter};
 
 use eframe::wgpu::{
     BindGroup, BindGroupLayout, Buffer, BufferDescriptor, BufferUsages, Device, Queue,

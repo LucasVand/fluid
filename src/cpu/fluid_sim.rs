@@ -4,7 +4,7 @@ use eframe::CreationContext;
 use glam::Vec3;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
-use crate::{renderer::utils::box3d::Box3d, spatial_map::SpatialMap};
+use crate::{cpu::spatial_map::SpatialMap, renderer::utils::box3d::Box3d};
 
 pub struct FluidSim {
     pub particles: Vec<Particle>,
@@ -45,7 +45,7 @@ impl Particle {
 
 impl FluidSim {
     const DAMPING: f32 = 0.7;
-    pub fn new(cc: &CreationContext<'_>, size: usize, bounds: Box3d) -> FluidSim {
+    pub fn new(_cc: &CreationContext<'_>, size: usize, bounds: Box3d) -> FluidSim {
         let mut parts = Self::create_box(size, bounds);
 
         let smoothing_radius = 15.0;

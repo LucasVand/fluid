@@ -1,6 +1,6 @@
 use eframe::wgpu::{
-    BindGroup, BindGroupLayout, BufferUsages, Device, PrimitiveTopology, Queue, RenderPass,
-    ShaderStages, TextureFormat, VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
+    BindGroup, BufferUsages, PrimitiveTopology, RenderPass, ShaderStages, TextureFormat,
+    VertexAttribute, VertexBufferLayout, VertexFormat, VertexStepMode,
 };
 use glam::Vec3;
 
@@ -10,11 +10,10 @@ use crate::{
         renderable::RenderCC,
         utils::{
             bind_group_builder::BindGroupBuilder,
-            bind_group_layout_builder::BindGroupLayoutBuilder, box3d::Box3d,
-            generic_shared_buffer::SharedBuffer, render_pipeline_builder::RenderPipelineBuilder,
+            bind_group_layout_builder::BindGroupLayoutBuilder, generic_shared_buffer::SharedBuffer,
+            render_pipeline_builder::RenderPipelineBuilder,
         },
     },
-    spatial_map::SpatialMap,
 };
 
 pub struct SpatialGrid {

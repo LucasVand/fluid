@@ -1,23 +1,18 @@
-use std::mem;
-
 use eframe::{
     CreationContext,
     egui::{Context, Key, TextureId, Ui},
     wgpu::{
-        BindGroup, Color, Device, FilterMode, LoadOp, Operations, Queue, RenderPassColorAttachment,
-        RenderPassDepthStencilAttachment, RenderPassDescriptor, ShaderStages, StoreOp, Texture,
-        TextureDimension, TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
+        Color, Device, FilterMode, LoadOp, Operations, Queue, RenderPassColorAttachment,
+        RenderPassDepthStencilAttachment, RenderPassDescriptor, StoreOp, Texture, TextureDimension,
+        TextureFormat, TextureUsages, TextureView, TextureViewDescriptor,
     },
 };
-use glam::{Mat4, Vec3};
+use glam::Vec3;
 
-use crate::{
-    fluid_sim::Particle,
-    renderer::{
-        camera::{Camera, GpuCamera},
-        renderable::{RenderCC, RenderContext, Renderable},
-        utils::{generic_shared_buffer::SharedBuffer, texture_builder::TextureBuilder},
-    },
+use crate::renderer::{
+    camera::Camera,
+    renderable::{RenderCC, RenderContext, Renderable},
+    utils::{generic_shared_buffer::SharedBuffer, texture_builder::TextureBuilder},
 };
 
 pub struct Render {
@@ -100,7 +95,7 @@ impl Render {
             renderables: Vec::new(),
         }
     }
-    fn get_creation_context(&self) -> RenderCC {
+    fn get_creation_context(&self) -> RenderCC<'_> {
         RenderCC {
             device: &self.device,
             queue: &self.queue,

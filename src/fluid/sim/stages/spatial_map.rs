@@ -74,7 +74,7 @@ impl SpatialMapStage {
     pub fn execute(&self, pass: &mut ComputePass, particle_count: usize) {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
-        pass.dispatch_workgroups(((particle_count as u32 + 63) / 64), 1, 1);
+        pass.dispatch_workgroups((particle_count as u32 + 63) / 64, 1, 1);
 
         let n = particle_count;
 
@@ -98,7 +98,7 @@ impl SpatialMapStage {
                         _pad: [0.0; 2],
                     }),
                 );
-                pass.dispatch_workgroups(((particle_count as u32 + 63) / 64), 1, 1);
+                pass.dispatch_workgroups((particle_count as u32 + 63) / 64, 1, 1);
 
                 j /= 2;
             }
@@ -106,10 +106,10 @@ impl SpatialMapStage {
         pass.set_bind_group(0, &self.finalize_bind_group, &[]);
         pass.set_pipeline(&self.clear_pipeline);
 
-        pass.dispatch_workgroups(((particle_count as u32 + 63) / 64), 1, 1);
+        pass.dispatch_workgroups((particle_count as u32 + 63) / 64, 1, 1);
 
         pass.set_pipeline(&self.finalize_pipeline);
-        pass.dispatch_workgroups(((particle_count as u32 + 63) / 64), 1, 1);
+        pass.dispatch_workgroups((particle_count as u32 + 63) / 64, 1, 1);
     }
 
     fn sort_pipeline(
