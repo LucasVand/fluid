@@ -90,17 +90,26 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
 
     let lookup_idx = range.x + local_id.x;
 
+    var loader_only: bool;
+    var particle_idx: u32;
+    var predicted: vec3<f32>;
     if lookup_idx >= range.y {
-        return;
-    }
-    let lookup = spatial_lookup[lookup_idx];
+        loader_only = true;
 
-    let particle_idx = lookup.y;
+        let start_spatial_index = spatial_lookup[range.x];
+        predicted = particles[start_spatial_index.y].predicted_position;
+        particle_idx = 0;
+    } else {
+        loader_only = false;
+
+        let lookup = spatial_lookup[lookup_idx];
+
+        particle_idx = lookup.y;
+        predicted = particles[particle_idx].predicted_position;
+    }
 
     var density = 0.00001;
     var near_density = 0.00001;
-
-    let predicted = particles[particle_idx].predicted_position;
 
     let cell_count = u32(arrayLength(&start_indices));
     let particle_count = arrayLength(&particles);
@@ -138,8 +147,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
 
                     let chunk_size = min(WORKGROUP_SIZE, end - i);
 
-                    for (var j: u32 = 0; j < chunk_size; j++) {
-                        process_particle(predicted, shared_predicted[j], &density, &near_density);
+                    if !loader_only {
+                        for (var j: u32 = 0; j < chunk_size; j++) {
+                            process_particle(predicted, shared_predicted[j], &density, &near_density);
+                        }
                     }
 
                     workgroupBarrier();

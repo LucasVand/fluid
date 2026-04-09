@@ -108,7 +108,7 @@ impl Fluid {
             .usages(BufferUsages::UNIFORM | BufferUsages::COPY_SRC)
             .build("Model Buf");
 
-        let particles: Vec<Particle> = Self::create_box(2_usize.pow(15), bounds);
+        let particles: Vec<Particle> = Self::create_box(2_usize.pow(16), bounds);
 
         let gpu_particles: Vec<GpuParticle> = particles.iter().map(|p| p.into()).collect();
 

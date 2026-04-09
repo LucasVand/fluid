@@ -9,7 +9,7 @@ use crate::fluid::sim::stages::pressure_force::PressureForceStage;
 use crate::fluid::sim::stages::spatial_map::SpatialMapStage;
 use crate::fluid::sim::stages::update_position::UpdatePositionStage;
 use crate::renderer::renderable::{RenderCC, RenderContext};
-use crate::renderer::utils::BufferBuilder;
+use crate::renderer::utils::{BufferBuilder, CommandEncoderBuilder};
 use eframe::wgpu::wgt::PollType;
 use eframe::wgpu::*;
 
@@ -187,37 +187,64 @@ impl FluidSim {
     }
 
     pub fn update(&mut self, rc: &RenderContext, mcc: &mut FluidModelContext) {
-        let mut command_encoder = self
-            .device
-            .create_command_encoder(&CommandEncoderDescriptor {
-                label: Some("Particle Update Encoder"),
+        let mut encoder = CommandEncoderBuilder::new(&self.device)
+            .label("Fluid Simulation")
+            .build();
+
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
+                label: Some("Predicted Position Pass"),
+                timestamp_writes: None,
             });
+            self.predicted_stage
+                .execute(&mut compute_pass, self.particle_count);
+        }
 
-        let mut compute_pass = command_encoder.begin_compute_pass(&ComputePassDescriptor {
-            label: Some("Particle Sim Encoder"),
-            timestamp_writes: None,
-        });
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
+                label: Some("Spatial Map Pass"),
+                timestamp_writes: None,
+            });
+            self.spatial_map_stage
+                .execute(&mut compute_pass, self.particle_count);
+        }
 
-        self.predicted_stage
-            .execute(&mut compute_pass, self.particle_count);
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
+                label: Some("Indirect Pass"),
+                timestamp_writes: None,
+            });
+            self.indirect_stage.execute(&mut compute_pass);
+        }
 
-        self.spatial_map_stage
-            .execute(&mut compute_pass, self.particle_count);
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
+                label: Some("Density Pass"),
+                timestamp_writes: None,
+            });
+            self.density_stage
+                .execute(&mut compute_pass, &self.indirect_buffer);
+        }
 
-        self.indirect_stage.execute(&mut compute_pass);
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
+                label: Some("Pressure Force Pass"),
+                timestamp_writes: None,
+            });
+            self.pressure_force_stage
+                .execute(&mut compute_pass, self.particle_count);
+        }
 
-        self.density_stage
-            .execute(&mut compute_pass, &self.indirect_buffer);
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
+                label: Some("Update Position Pass"),
+                timestamp_writes: None,
+            });
+            self.update_position_stage
+                .execute(&mut compute_pass, self.particle_count);
+        }
 
-        self.pressure_force_stage
-            .execute(&mut compute_pass, self.particle_count);
-
-        self.update_position_stage
-            .execute(&mut compute_pass, self.particle_count);
-
-        drop(compute_pass);
-
-        self.queue.submit(Some(command_encoder.finish()));
+        self.queue.submit(Some(encoder.finish()));
         let _ = self.device.poll(PollType::wait_indefinitely());
 
         // self.indirect_stage.debug_print_ranges(&self.queue);
