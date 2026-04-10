@@ -69,7 +69,7 @@ fn viscosity_smoothing_kernel(radius: f32, dist: f32) -> f32 {
 
 fn convert_density_to_pressure(density: f32, near_density: f32) -> vec2<f32> {
     let density_error = density - params.target_density;
-    let pressure = density_error * params.pressure_multiplier * 170.0;
+    let pressure = density_error * params.pressure_multiplier;
     let near_pressure = near_density * params.near_pressure_multiplier;
     return vec2<f32>(pressure, near_pressure);
 }
@@ -104,7 +104,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
     var velocity: vec3<f32>;
     var density: f32;
     var near_density: f32;
-    var neighbour_count = 0;
+    var neighbour_count: u32 = 0;
     if lookup_idx >= range.y {
         loader_only = true;
 
@@ -171,7 +171,6 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
 
                     if !loader_only {
                         for (var j: u32 = 0; j < chunk_size; j++) {
-                            neighbour_count += 1;
                             process_particle(&pressure_force,
                                 &viscosity_force,
                                 predicted,
@@ -181,7 +180,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
                                 shared_predicted[j],
                                 shared_velocity[j],
                                 shared_density[j],
-                                shared_near_density[j]);
+                                shared_near_density[j],
+                                &neighbour_count);
                         }
                     }
 
@@ -196,7 +196,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
         particles[particle_idx].velocity += ((pressure_force * inv_density) + viscosity_force * params.viscosity_strength);
         // Airborne drag: damp spray/isolated particles to prevent them flying off
         if neighbour_count < 8 {
-            let drag = 1.0f - 0.75f * params.time_step;
+            let drag = 1.0f - 1.5f * params.time_step;
             particles[particle_idx].velocity.x *= drag;
         }
     }
@@ -211,13 +211,15 @@ fn process_particle(pressure_force: ptr<function, vec3<f32>>,
     neighbor_predicted: vec3<f32>,
     neighbor_velocity: vec3<f32>,
     neighbor_density: f32,
-    neighbor_near_density: f32) {
+    neighbor_near_density: f32,
+    neighbour_count: ptr<function, u32>) {
 
     let dst = distance(neighbor_predicted, predicted);
     if dst == 0.0 {
         return;
     }
 
+    *neighbour_count += 1;
     let dir = (neighbor_predicted - predicted) / dst;
     let slope = smoothing_kernel_derivative(params.smoothing_radius, dst);
     let slope_near = near_density_smoothing_kernel_derivative(params.smoothing_radius, dst);
@@ -227,11 +229,11 @@ fn process_particle(pressure_force: ptr<function, vec3<f32>>,
     let self_pressure = convert_density_to_pressure(density, near_density);
     let shared_pressure = (neighbor_pressure + self_pressure) * 0.5;
 
-    let density_product = neighbor_density * density;
-    *pressure_force += shared_pressure.x * dir * slope * MASS / density_product;
+    // let density_product = neighbor_density * density;
+    *pressure_force += shared_pressure.x * dir * slope * MASS / density;
 
-    let near_density_product = neighbor_near_density * near_density;
-    *pressure_force += shared_pressure.y * dir * slope_near * MASS / near_density_product;
+    // let near_density_product = neighbor_near_density * near_density;
+    *pressure_force += shared_pressure.y * dir * slope_near * MASS / near_density;
 
     // Viscosity force
     let influence = viscosity_smoothing_kernel(params.smoothing_radius, dst);

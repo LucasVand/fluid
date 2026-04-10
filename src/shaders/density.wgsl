@@ -165,32 +165,4 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
     }
 }
 
-fn process_cell(
-    cell_key: u32,
-    particle_idx: u32,
-    particle_pos: vec3<f32>,
-    cell_count: u32,
-    density: ptr<function, f32>,
-    near_density: ptr<function, f32>
-) {
-    let start_index = start_indices[cell_key];
-    let end_index = end_indices[cell_key];
-    if start_index == MAX {
-        return;
-    }
 
-    for (var i = start_index; i < end_index; i++) {
-        let lookup_entry = spatial_lookup[i];
-        let lookup_cell_key = lookup_entry.x;
-        let neighbor_idx = lookup_entry.y;
-
-        if neighbor_idx != particle_idx {
-            let neighbor = particles[neighbor_idx];
-            process_particle(particle_pos, neighbor.predicted_position, density, near_density);
-        }
-    }
-}
-
-fn is_nan(x: f32) -> bool {
-    return x != x;
-}

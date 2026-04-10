@@ -95,7 +95,7 @@ impl Renderable for Fluid {
 
 impl Fluid {
     pub fn new(rcc: &RenderCC) -> Self {
-        let size = 80.0;
+        let size = 70.0;
         let bounds = Box3d::from_center(
             Vec3::new(0.0, 0.0, 0.0),
             Vec3::new(size * 4.0, size * 1.5, size),
@@ -123,16 +123,16 @@ impl Fluid {
             particles: particles,
             params: FluidParams {
                 target_density: 0.10,
-                pressure_multiplier: 5.0,
-                near_pressure_multiplier: 5.0,
-                smoothing_radius: 15.0,
+                pressure_multiplier: 7000.0,
+                near_pressure_multiplier: 1000.0,
+                smoothing_radius: 20.0,
                 gravity: 2550.0,
-                damping: 0.7,
+                damping: 0.95,
                 time_step: 1.0 / 60.0,
                 particle_size: 2.0,
-                viscosity_strength: 0.8,
-                color_multiplier: 0.008,
-                color_offset: 0.63,
+                viscosity_strength: 0.5,
+                color_multiplier: 0.001,
+                color_offset: 0.60,
                 bounds: bounds,
                 is_running: false,
             },
@@ -180,7 +180,7 @@ impl Fluid {
 
         let particle_dist = 3.0;
         let center_offset = (cube_size as f32 * particle_dist) / 2.0;
-        let center = bounds.center() - Vec3::new(center_offset, center_offset, center_offset);
+        let center = bounds.center() - Vec3::new(center_offset * 2.0, center_offset, center_offset);
 
         for i in 0..cube_size {
             for j in 0..cube_size {
@@ -188,7 +188,7 @@ impl Fluid {
                     if i * cube_size * cube_size + j * cube_size + k < size {
                         particles.push(Particle::new(
                             Vec3::new(
-                                j as f32 * particle_dist,
+                                j as f32 * particle_dist * 2.0,
                                 i as f32 * particle_dist,
                                 k as f32 * particle_dist,
                             ) + center,
