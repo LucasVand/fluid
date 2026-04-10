@@ -16,14 +16,17 @@ use eframe::wgpu::*;
 pub struct FluidSim {
     pub device: Device,
     pub queue: Queue,
+
     pub particles_buffer: Buffer,
-    pub particles_staging: Buffer,
     pub params_buffer: Buffer,
     pub spatial_lookup_buffer: Buffer,
     pub start_indices_buffer: Buffer,
     pub end_indices_buffer: Buffer,
+    pub cell_ranges_buffer: Buffer,
     pub indirect_buffer: Buffer,
+
     pub particle_count: usize,
+
     pub predicted_stage: PredictedPositionStage,
     pub density_stage: DensityStage,
     pub pressure_force_stage: PressureForceStage,
@@ -36,11 +39,6 @@ impl FluidSim {
     pub fn new(rcc: &RenderCC, mcc: &FluidModelContext) -> Self {
         let device = rcc.device;
         let particle_count = mcc.particles.len();
-
-        let particles_staging = BufferBuilder::new(device)
-            .size((std::mem::size_of::<GpuParticle>() * particle_count) as u64)
-            .usages(BufferUsages::COPY_DST | BufferUsages::MAP_READ)
-            .build("Particles Staging Buffer");
 
         let params: GpuSimParams = (&mcc.params).into();
         let params_buffer = BufferBuilder::new(device)
@@ -70,12 +68,12 @@ impl FluidSim {
         let cell_ranges_size = (std::mem::size_of::<(u32, u32)>() * particle_count) as u64;
         let cell_ranges_buffer = BufferBuilder::new(device)
             .size(cell_ranges_size)
-            .usages(BufferUsages::STORAGE | BufferUsages::COPY_DST | BufferUsages::COPY_SRC)
+            .usages(BufferUsages::STORAGE | BufferUsages::COPY_DST)
             .build("Cell Ranges Buffer");
 
         let indirect_buffer = BufferBuilder::new(device)
             .size(4 * 4)
-            .usages(BufferUsages::STORAGE | BufferUsages::INDIRECT | BufferUsages::COPY_SRC)
+            .usages(BufferUsages::STORAGE | BufferUsages::INDIRECT | BufferUsages::COPY_DST)
             .build("Indirect Buffer");
 
         let predicted_stage =
@@ -95,6 +93,8 @@ impl FluidSim {
             &spatial_lookup_buffer,
             &cell_ranges_buffer,
             &indirect_buffer,
+            &start_indices_buffer,
+            &end_indices_buffer,
             particle_count,
         );
 
@@ -124,7 +124,6 @@ impl FluidSim {
             device: device.clone(),
             queue: rcc.queue.clone(),
             particles_buffer: mcc.particles_buf.clone(),
-            particles_staging,
             params_buffer,
             spatial_lookup_buffer,
             start_indices_buffer,
@@ -137,6 +136,7 @@ impl FluidSim {
             spatial_map_stage,
             indirect_stage,
             indirect_buffer,
+            cell_ranges_buffer,
         }
     }
 
@@ -161,6 +161,8 @@ impl FluidSim {
         let mut encoder = CommandEncoderBuilder::new(&self.device)
             .label("Fluid Simulation")
             .build();
+        encoder.clear_buffer(&self.indirect_buffer, 0, Some(16));
+        encoder.clear_buffer(&self.cell_ranges_buffer, 0, None);
 
         {
             let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
@@ -217,7 +219,5 @@ impl FluidSim {
 
         self.queue.submit(Some(encoder.finish()));
         let _ = self.device.poll(PollType::wait_indefinitely());
-
-        // self.indirect_stage.debug_print_ranges(&self.queue);
     }
 }

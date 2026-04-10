@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use eframe::{
     egui::Key,
     wgpu::{BufferUsages, RenderPass},
@@ -8,6 +10,7 @@ use crate::{
     adjustable::Adjuster,
     fluid::{
         fluid_params::FluidParams,
+        fluid_spawner::create_box,
         model_context::FluidModelContext,
         particle::{GpuParticle, Particle},
         render::render::FluidRenderer,
@@ -37,7 +40,7 @@ impl Renderable for Fluid {
                 self.mcc.params.is_running = !self.mcc.params.is_running;
             }
             if i.key_pressed(Key::R) {
-                self.mcc.particles = Self::create_box(self.mcc.particles.len(), self.mcc.bounds);
+                self.mcc.particles = create_box(self.mcc.particles.len(), self.mcc.bounds);
                 self.sim.upload_particles(&self.mcc.particles);
             }
             if i.key_pressed(Key::M) {
@@ -95,51 +98,7 @@ impl Renderable for Fluid {
 
 impl Fluid {
     pub fn new(rcc: &RenderCC) -> Self {
-        let size = 70.0;
-        let bounds = Box3d::from_center(
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(size * 4.0, size * 1.5, size),
-        );
-
-        let model_mat = Fluid::model_matrix(Vec3::ZERO, Vec3::ZERO, 0.1);
-
-        let bytes: &[u8] = &bytemuck::cast_slice(&model_mat);
-
-        let model_buf = BufferBuilder::new(rcc.device)
-            .contents_slice(bytes)
-            .usages(BufferUsages::UNIFORM | BufferUsages::COPY_SRC)
-            .build("Model Buf");
-
-        let particles: Vec<Particle> = Self::create_box(2_usize.pow(16), bounds);
-
-        let gpu_particles: Vec<GpuParticle> = particles.iter().map(|p| p.into()).collect();
-
-        let particles_buf = BufferBuilder::new(rcc.device)
-            .contents_slice(&bytemuck::cast_slice(&gpu_particles))
-            .usages(BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST)
-            .build("Particles Buffer");
-
-        let mcc = FluidModelContext {
-            particles: particles,
-            params: FluidParams {
-                target_density: 0.10,
-                pressure_multiplier: 7000.0,
-                near_pressure_multiplier: 1000.0,
-                smoothing_radius: 20.0,
-                gravity: 2550.0,
-                damping: 0.95,
-                time_step: 1.0 / 60.0,
-                particle_size: 2.0,
-                viscosity_strength: 0.5,
-                color_multiplier: 0.001,
-                color_offset: 0.60,
-                bounds: bounds,
-                is_running: false,
-            },
-            bounds: bounds,
-            model_buf: model_buf,
-            particles_buf: particles_buf,
-        };
+        let mcc = FluidModelContext::new(rcc);
 
         let renderer = FluidRenderer::new(rcc, &mcc);
 
@@ -172,32 +131,5 @@ impl Fluid {
         // Combine to get model matrix
         let model = translate * rotate * scale;
         return model.to_cols_array_2d();
-    }
-    pub fn create_box(size: usize, bounds: Box3d) -> Vec<Particle> {
-        let mut particles = Vec::new();
-
-        let cube_size = f32::cbrt(size as f32).ceil() as usize;
-
-        let particle_dist = 3.0;
-        let center_offset = (cube_size as f32 * particle_dist) / 2.0;
-        let center = bounds.center() - Vec3::new(center_offset * 2.0, center_offset, center_offset);
-
-        for i in 0..cube_size {
-            for j in 0..cube_size {
-                for k in 0..cube_size {
-                    if i * cube_size * cube_size + j * cube_size + k < size {
-                        particles.push(Particle::new(
-                            Vec3::new(
-                                j as f32 * particle_dist * 2.0,
-                                i as f32 * particle_dist,
-                                k as f32 * particle_dist,
-                            ) + center,
-                            Vec3::ZERO,
-                        ));
-                    }
-                }
-            }
-        }
-        return particles;
     }
 }

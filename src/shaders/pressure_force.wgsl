@@ -192,12 +192,13 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
     }
 
     if !loader_only {
-        let inv_density = 1.0 / max(particles[particle_idx].density, 0.001);
-        particles[particle_idx].velocity += ((pressure_force * inv_density) + viscosity_force * params.viscosity_strength);
-        // Airborne drag: damp spray/isolated particles to prevent them flying off
-        if neighbour_count < 8 {
-            let drag = 1.0f - 1.5f * params.time_step;
-            particles[particle_idx].velocity.x *= drag;
+        if neighbour_count > 8 {
+            let inv_density = 1.0 / max(particles[particle_idx].density, 0.001);
+            particles[particle_idx].velocity += ((pressure_force * inv_density) + viscosity_force * params.viscosity_strength);
+
+            // Airborne drag: damp spray/isolated particles to prevent them flying off
+            // let drag = 0.7;
+            // particles[particle_idx].velocity *= drag;
         }
     }
 }
