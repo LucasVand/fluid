@@ -37,7 +37,7 @@ impl SpatialMapStage {
         let pipeline = ComputePipelineBuilder::new(device)
             .bind_group_layout(&[&bind_group_layout])
             .shader(
-                include_str!("../../../shaders/spatial_map_insert.wgsl"),
+                include_str!("./shaders/spatial_map_insert.wgsl"),
                 "Spatial Map Shader",
             )
             .entry_point("main")
@@ -133,7 +133,7 @@ impl SpatialMapStage {
         let pipeline = ComputePipelineBuilder::new(device)
             .bind_group_layout(&[&bind_group_layout])
             .shader(
-                include_str!("../../../shaders/spatial_map_sort.wgsl"),
+                include_str!("./shaders/spatial_map_sort.wgsl"),
                 "Spatial Map Shader",
             )
             .push_constant_range(ShaderStages::COMPUTE, 0..16)
@@ -163,7 +163,7 @@ impl SpatialMapStage {
         let pipeline_final = ComputePipelineBuilder::new(device)
             .bind_group_layout(&[&bind_group_layout])
             .shader(
-                include_str!("../../../shaders/spatial_map_finalize.wgsl"),
+                include_str!("./shaders/spatial_map_finalize.wgsl"),
                 "Spatial Map Finalize Shader",
             )
             .entry_point("main")
@@ -172,7 +172,7 @@ impl SpatialMapStage {
         let pipeline_clear = ComputePipelineBuilder::new(device)
             .bind_group_layout(&[&bind_group_layout])
             .shader(
-                include_str!("../../../shaders/spatial_map_finalize.wgsl"),
+                include_str!("./shaders/spatial_map_finalize.wgsl"),
                 "Spatial Map Shader",
             )
             .entry_point("main_clear")

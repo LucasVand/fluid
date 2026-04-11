@@ -3,6 +3,7 @@ use crate::fluid::model_context::FluidModelContext;
 use crate::fluid::particle::{GpuParticle, Particle};
 use crate::fluid::sim::gpu_sim_params::GpuSimParams;
 use crate::fluid::sim::stages::density::DensityStage;
+use crate::fluid::sim::stages::density_field::DensityFieldStage;
 use crate::fluid::sim::stages::indirect::IndirectStage;
 use crate::fluid::sim::stages::predicted_position::PredictedPositionStage;
 use crate::fluid::sim::stages::pressure_force::PressureForceStage;
@@ -33,6 +34,7 @@ pub struct FluidSim {
     pub update_position_stage: UpdatePositionStage,
     pub spatial_map_stage: SpatialMapStage,
     pub indirect_stage: IndirectStage,
+    pub density_field_stage: DensityFieldStage,
 }
 
 impl FluidSim {
@@ -120,6 +122,16 @@ impl FluidSim {
         let update_position_stage =
             UpdatePositionStage::create(device, &mcc.particles_buf, &params_buffer);
 
+        let density_field_stage = DensityFieldStage::create(
+            device,
+            &mcc.particles_buf,
+            &params_buffer,
+            &spatial_lookup_buffer,
+            &start_indices_buffer,
+            &end_indices_buffer,
+            &mcc.density_map,
+        );
+
         FluidSim {
             device: device.clone(),
             queue: rcc.queue.clone(),
@@ -135,6 +147,7 @@ impl FluidSim {
             update_position_stage,
             spatial_map_stage,
             indirect_stage,
+            density_field_stage,
             indirect_buffer,
             cell_ranges_buffer,
         }
@@ -215,6 +228,13 @@ impl FluidSim {
             });
             self.update_position_stage
                 .execute(&mut compute_pass, self.particle_count);
+        }
+        {
+            let mut compute_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
+                label: Some("Density Field Stage"),
+                timestamp_writes: None,
+            });
+            self.density_field_stage.execute(&mut compute_pass);
         }
 
         self.queue.submit(Some(encoder.finish()));

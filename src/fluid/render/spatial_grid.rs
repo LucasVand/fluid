@@ -106,7 +106,7 @@ impl SpatialGrid {
 
         let pipeline = RenderPipelineBuilder::new(device)
             .shader(
-                include_str!("../../shaders/spatial_grid.wgsl"),
+                include_str!("../../fluid/sim/stages/spatial_map/shaders/spatial_grid.wgsl"),
                 "Spatial Grid Shader",
             )
             .primitive(PrimitiveTopology::LineList)

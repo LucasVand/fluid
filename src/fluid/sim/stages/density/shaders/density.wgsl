@@ -115,6 +115,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
     let particle_count = arrayLength(&particles);
 
     let coords = get_cell_coords(predicted);
+    let smoothing_radius_sq = params.smoothing_radius * params.smoothing_radius;
 
     // Check all 27 neighboring cells
     for (var ox: i32 = -1; ox <= 1; ox += 1) {
@@ -149,7 +150,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(local_invo
 
                     if !loader_only {
                         for (var j: u32 = 0; j < chunk_size; j++) {
-                            process_particle(predicted, shared_predicted[j], &density, &near_density);
+                            let diff = predicted - shared_predicted[j];
+                            let dst_sq = dot(diff, diff);
+                            if dst_sq < smoothing_radius_sq {
+                                process_particle(predicted, shared_predicted[j], &density, &near_density);
+                            }
                         }
                     }
 

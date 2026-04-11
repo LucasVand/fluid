@@ -42,7 +42,7 @@ impl IndirectStage {
 
         let pipeline = ComputePipelineBuilder::new(device)
             .shader(
-                include_str!("../../../shaders/calculate_indirect.wgsl"),
+                include_str!("./shaders/calculate_indirect.wgsl"),
                 "Indirect Shader",
             )
             .bind_group_layout(&[&bgl])

@@ -39,7 +39,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     var particle = particles[idx];
 
     // Apply gravity to velocity
-    particles[idx].velocity.y -= params.gravity * (1.0 / 120.0);
+    particles[idx].velocity.y -= params.gravity * params.time_step;
 
     // Calculate predicted position
     particles[idx].predicted_position = particle.position + particle.velocity * (1.0 / 120.0);

@@ -9,17 +9,10 @@ use glam::{Mat4, Vec3};
 use crate::{
     adjustable::Adjuster,
     fluid::{
-        fluid_params::FluidParams,
-        fluid_spawner::create_box,
-        model_context::FluidModelContext,
-        particle::{GpuParticle, Particle},
-        render::render::FluidRenderer,
+        fluid_spawner::create_box, model_context::FluidModelContext, render::render::FluidRenderer,
         sim::fluid_sim::FluidSim,
     },
-    renderer::{
-        renderable::{RenderCC, RenderContext, Renderable},
-        utils::{BufferBuilder, box3d::Box3d},
-    },
+    renderer::renderable::{RenderCC, RenderContext, Renderable},
 };
 
 pub struct Fluid {
@@ -40,7 +33,7 @@ impl Renderable for Fluid {
                 self.mcc.params.is_running = !self.mcc.params.is_running;
             }
             if i.key_pressed(Key::R) {
-                self.mcc.particles = create_box(self.mcc.particles.len(), self.mcc.bounds);
+                self.mcc.particles = create_box(self.mcc.particles.len(), self.mcc.bounds, 5.0);
                 self.sim.upload_particles(&self.mcc.particles);
             }
             if i.key_pressed(Key::M) {
@@ -86,6 +79,7 @@ impl Renderable for Fluid {
             a.show(rc.ctx, &mut self.modifiers_open);
         }
 
+        self.mcc.params.time_step = rc.dt;
         self.sim.update_params(&self.mcc.params);
         if self.mcc.params.is_running {
             self.sim.update(rc, &mut self.mcc);

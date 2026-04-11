@@ -78,7 +78,7 @@ impl Wireframe {
 
         let line_pipeline = RenderPipelineBuilder::new(device)
             .shader(
-                include_str!("../../shaders/wireframe.wgsl"),
+                include_str!("../../renderer/shaders/wireframe.wgsl"),
                 "Wireframe Shader",
             )
             .primitive(PrimitiveTopology::LineList)

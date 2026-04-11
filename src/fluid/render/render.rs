@@ -93,7 +93,7 @@ impl FluidRenderer {
             .build("Particles Buffer Layout");
 
         let particle_pipeline = RenderPipelineBuilder::new(device)
-            .shader(include_str!("../../shaders/draw.wgsl"), "Draw Shader")
+            .shader(include_str!("../../renderer/shaders/draw.wgsl"), "Draw Shader")
             .primitive(PrimitiveTopology::TriangleList)
             .bind_group_layout(&[&bgl])
             .vertex_entry("vs_main")

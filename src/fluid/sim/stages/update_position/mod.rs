@@ -1,34 +1,34 @@
 use crate::renderer::utils::{BindGroupBuilder, BindGroupLayoutBuilder, ComputePipelineBuilder};
 use eframe::wgpu::*;
 
-pub struct PredictedPositionStage {
+pub struct UpdatePositionStage {
     pub pipeline: ComputePipeline,
     pub bind_group_layout: BindGroupLayout,
     pub bind_group: BindGroup,
 }
 
-impl PredictedPositionStage {
+impl UpdatePositionStage {
     pub fn create(device: &Device, particles_buffer: &Buffer, params_buffer: &Buffer) -> Self {
         let bind_group_layout = BindGroupLayoutBuilder::new(device)
             .buffer(0, ShaderStages::COMPUTE, false)
             .uniform(1, ShaderStages::COMPUTE)
-            .build("Predicted Position Bind Group Layout");
+            .build("Update Position Bind Group Layout");
 
         let pipeline = ComputePipelineBuilder::new(device)
             .bind_group_layout(&[&bind_group_layout])
             .shader(
-                include_str!("../../../shaders/predicted.wgsl"),
-                "Predicted Position Shader",
+                include_str!("./shaders/update_position.wgsl"),
+                "Update Position Shader",
             )
             .entry_point("main")
-            .build("Predicted Position Pipeline");
+            .build("Update Position Pipeline");
 
         let bind_group = BindGroupBuilder::new(device, &bind_group_layout)
             .buffer(0, particles_buffer)
             .buffer(1, params_buffer)
-            .build("Predicted Position Bind Group");
+            .build("Update Position Bind Group");
 
-        PredictedPositionStage {
+        UpdatePositionStage {
             pipeline,
             bind_group_layout,
             bind_group,

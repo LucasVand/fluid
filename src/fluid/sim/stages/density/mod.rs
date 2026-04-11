@@ -1,14 +1,13 @@
 use crate::renderer::utils::{BindGroupBuilder, BindGroupLayoutBuilder, ComputePipelineBuilder};
-use bytemuck::cast_slice;
 use eframe::wgpu::*;
 
-pub struct PressureForceStage {
+pub struct DensityStage {
     pub pipeline: ComputePipeline,
     pub bind_group_layout: BindGroupLayout,
     pub bind_group: BindGroup,
 }
 
-impl PressureForceStage {
+impl DensityStage {
     pub fn create(
         device: &Device,
         particles_buffer: &Buffer,
@@ -25,16 +24,16 @@ impl PressureForceStage {
             .buffer(3, ShaderStages::COMPUTE, true)
             .buffer(4, ShaderStages::COMPUTE, true)
             .buffer(5, ShaderStages::COMPUTE, true)
-            .build("Pressure Force Bind Group Layout");
+            .build("Density Bind Group Layout");
 
         let pipeline = ComputePipelineBuilder::new(device)
             .bind_group_layout(&[&bind_group_layout])
             .shader(
-                include_str!("../../../shaders/pressure_force.wgsl"),
-                "Pressure Force Shader",
+                include_str!("./shaders/density.wgsl"),
+                "Density Shader",
             )
             .entry_point("main")
-            .build("Pressure Force Pipeline");
+            .build("Density Pipeline");
 
         let bind_group = BindGroupBuilder::new(device, &bind_group_layout)
             .buffer(0, particles_buffer)
@@ -43,9 +42,9 @@ impl PressureForceStage {
             .buffer(3, start_indices_buffer)
             .buffer(4, end_indices_buffer)
             .buffer(5, cell_ranges_buffer)
-            .build("Pressure Force Bind Group");
+            .build("Density Bind Group");
 
-        PressureForceStage {
+        DensityStage {
             pipeline,
             bind_group_layout,
             bind_group,
@@ -55,6 +54,7 @@ impl PressureForceStage {
     pub fn execute(&self, compute_pass: &mut ComputePass, indirect_buffer: &Buffer) {
         compute_pass.set_pipeline(&self.pipeline);
         compute_pass.set_bind_group(0, &self.bind_group, &[]);
+        // compute_pass.dispatch_workgroups(((particle_count as u32 + 63) / 64), 1, 1);
         compute_pass.dispatch_workgroups_indirect(indirect_buffer, 0);
     }
 }
