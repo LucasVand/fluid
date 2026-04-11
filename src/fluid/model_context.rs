@@ -34,8 +34,13 @@ impl FluidModelContext {
         );
 
         let model_mat = Fluid::model_matrix(Vec3::ZERO, Vec3::ZERO, 0.1);
+        let inv_model_mat = model_mat.inverse();
 
-        let bytes: &[u8] = &bytemuck::cast_slice(&model_mat);
+        let model = [
+            model_mat.to_cols_array_2d(),
+            inv_model_mat.to_cols_array_2d(),
+        ];
+        let bytes: &[u8] = &bytemuck::cast_slice(&model);
 
         let model_buf = BufferBuilder::new(rcc.device)
             .contents_slice(bytes)
@@ -75,6 +80,10 @@ impl FluidModelContext {
                 color_offset: 0.60,
                 bounds: bounds,
                 is_running: false,
+                red_scattering: 0.08,
+                blue_scattering: 0.04,
+                green_scattering: 0.05,
+                render_density_multiplier: 50.0,
             },
             bounds: bounds,
             model_buf: model_buf,

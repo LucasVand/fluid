@@ -40,4 +40,9 @@ pub struct FluidParams {
     pub color_offset: f32,
 
     pub is_running: bool,
+
+    pub red_scattering: f32,
+    pub blue_scattering: f32,
+    pub green_scattering: f32,
+    pub render_density_multiplier: f32,
 }

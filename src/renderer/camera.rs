@@ -18,11 +18,21 @@ pub struct GpuCamera {
     _pad: f32,
 }
 
-const MOVEMENT_AMOUNT: f32 = 0.2;
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+pub struct GpuCameraNew {
+    matrix: [[f32; 4]; 4],   // 64
+    inv_proj: [[f32; 4]; 4], // 64
+    inv_view: [[f32; 4]; 4], // 64
+    position: Vec3,          // 12
+    _pad: f32,
+}
+
+const MOVEMENT_AMOUNT: f32 = 0.7;
 const ROTATE_AMOUNT: f32 = 0.2;
 impl Camera {
     pub fn new() -> Self {
-        let position = Vec3::new(-20.0, 0.0, -20.0);
+        let position = Vec3::new(-70.0, 0.0, -70.0);
         let yaw: f32 = 0.0;
         let pitch: f32 = 0.0;
 
@@ -105,7 +115,12 @@ impl Camera {
         // self.position.y = y;
     }
 
-    pub fn get_projection(&self) -> [[f32; 4]; 4] {
+    pub fn get_projection(&self) -> Mat4 {
+        let (proj, view) = self.get_proj_view();
+
+        return proj * view;
+    }
+    pub fn get_proj_view(&self) -> (Mat4, Mat4) {
         let c0 = Vec4::new(self.right.x, self.up.x, -self.forwards.x, 0.0);
         let c1 = Vec4::new(self.right.y, self.up.y, -self.forwards.y, 0.0);
         let c2 = Vec4::new(self.right.z, self.up.z, -self.forwards.z, 0.0);
@@ -122,12 +137,24 @@ impl Camera {
         let z_far = 100.0;
         let projection = Mat4::perspective_rh_gl(fov_y, aspect, z_near, z_far);
 
-        let view_proj = projection * view;
-        return view_proj.to_cols_array_2d();
+        (projection, view)
     }
     pub fn to_gpu(&self) -> GpuCamera {
         GpuCamera {
-            matrix: self.get_projection(),
+            matrix: self.get_projection().to_cols_array_2d(),
+            position: self.position,
+            _pad: 0.0,
+        }
+    }
+    pub fn to_gpu_new(&self) -> GpuCameraNew {
+        let m = self.get_projection();
+        let (proj, view) = self.get_proj_view();
+        let inv_proj = proj.inverse();
+        let inv_view = view.inverse();
+        GpuCameraNew {
+            matrix: m.to_cols_array_2d(),
+            inv_proj: inv_proj.to_cols_array_2d(),
+            inv_view: inv_view.to_cols_array_2d(),
             position: self.position,
             _pad: 0.0,
         }

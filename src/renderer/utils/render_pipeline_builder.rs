@@ -1,5 +1,5 @@
 use eframe::wgpu::{
-    BindGroupLayout, BlendState, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState,
+    BindGroupLayout, BlendState, BlendComponent, BlendFactor, BlendOperation, ColorTargetState, ColorWrites, CompareFunction, DepthBiasState,
     DepthStencilState, Device, FragmentState, FrontFace, MultisampleState,
     PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState, PrimitiveTopology,
     RenderPipeline, RenderPipelineDescriptor, ShaderModule, ShaderModuleDescriptor, ShaderSource,
@@ -19,6 +19,7 @@ pub struct RenderPipelineBuilder<'a> {
 
     depth_stencil: Option<DepthStencilState>,
     color_targets: Vec<Option<ColorTargetState>>,
+    blend_state: Option<BlendState>,
 }
 
 impl<'a> RenderPipelineBuilder<'a> {
@@ -33,6 +34,7 @@ impl<'a> RenderPipelineBuilder<'a> {
             vertex_buffers: Vec::new(),
             color_targets: Vec::new(),
             depth_stencil: None,
+            blend_state: None,
         }
     }
     pub fn bind_group_layout(mut self, bind_group_layout: &'a [&'a BindGroupLayout]) -> Self {
@@ -94,6 +96,12 @@ impl<'a> RenderPipelineBuilder<'a> {
         })];
         self
     }
+
+    pub fn blend_state(mut self, blend: BlendState) -> Self {
+        self.blend_state = Some(blend);
+        self
+    }
+
     pub fn build(self, label: &'a str) -> RenderPipeline {
         let module = self.module.expect(
             "PipelineBuilder: shader module not set. Call .shader(wgsl_code, label) before build()",
@@ -109,6 +117,21 @@ impl<'a> RenderPipelineBuilder<'a> {
                 bind_group_layouts: &self.bind_group_layouts,
                 push_constant_ranges: &[],
             });
+
+        // Apply blend state to color targets if it was set
+        let color_targets = if let Some(blend) = self.blend_state {
+            vec![Some(ColorTargetState {
+                format: self.color_targets.first()
+                    .and_then(|ct| ct.as_ref())
+                    .map(|ct| ct.format)
+                    .expect("RenderPipelineBuilder: color format not set"),
+                blend: Some(blend),
+                write_mask: ColorWrites::ALL,
+            })]
+        } else {
+            self.color_targets
+        };
+
         self.device
             .create_render_pipeline(&RenderPipelineDescriptor {
                 label: Some(label),
@@ -126,7 +149,7 @@ impl<'a> RenderPipelineBuilder<'a> {
                     module: &module,
                     entry_point: self.fragment,
                     compilation_options: PipelineCompilationOptions::default(),
-                    targets: &self.color_targets,
+                    targets: &color_targets,
                 }),
                 multiview: None,
                 cache: None,

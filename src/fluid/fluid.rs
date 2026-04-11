@@ -1,16 +1,11 @@
-use std::time::SystemTime;
-
-use eframe::{
-    egui::Key,
-    wgpu::{BufferUsages, RenderPass},
-};
+use eframe::{egui::Key, wgpu::RenderPass};
 use glam::{Mat4, Vec3};
 
 use crate::{
     adjustable::Adjuster,
     fluid::{
-        fluid_spawner::create_box, model_context::FluidModelContext, render::render::FluidRenderer,
-        sim::fluid_sim::FluidSim,
+        fluid_spawner::create_box, model_context::FluidModelContext,
+        render::ray_march_render::FluidRenderer, sim::fluid_sim::FluidSim,
     },
     renderer::renderable::{RenderCC, RenderContext, Renderable},
 };
@@ -75,6 +70,27 @@ impl Renderable for Fluid {
             // a.add_drag(&mut self.radius, "Force Radius");
             // a.add_drag(&mut self.strength, "Force Strength");
             a.add_drag(&mut self.mcc.params.gravity, "Gravity Strength");
+            a.add_drag(
+                &mut self.mcc.params.render_density_multiplier,
+                "Render Multiplier",
+            );
+
+            a.add_float(
+                &mut self.mcc.params.red_scattering,
+                0.0..=1.0,
+                "Red Scattering",
+            );
+
+            a.add_float(
+                &mut self.mcc.params.blue_scattering,
+                0.0..=1.0,
+                "Blue Scattering",
+            );
+            a.add_float(
+                &mut self.mcc.params.green_scattering,
+                0.0..=1.0,
+                "Green Scattering",
+            );
 
             a.show(rc.ctx, &mut self.modifiers_open);
         }
@@ -105,7 +121,7 @@ impl Fluid {
             modifiers_open: false,
         }
     }
-    pub fn model_matrix(pos: Vec3, rotation: Vec3, scale: f32) -> [[f32; 4]; 4] {
+    pub fn model_matrix(pos: Vec3, rotation: Vec3, scale: f32) -> Mat4 {
         // position, rotation, and scale
         let position = pos;
         let rotation = rotation;
@@ -124,6 +140,6 @@ impl Fluid {
 
         // Combine to get model matrix
         let model = translate * rotate * scale;
-        return model.to_cols_array_2d();
+        return model;
     }
 }

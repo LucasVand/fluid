@@ -77,8 +77,11 @@ impl Render {
         camera.rotate_about(0.0, 0.0, Vec3::ZERO);
 
         let mut shared_uniform = SharedBuffer::new(&device, 2_u64.pow(13));
-        let camera_index =
-            shared_uniform.allocate_uniform(&queue, bytemuck::bytes_of(&camera.to_gpu()), "Camera");
+        let camera_index = shared_uniform.allocate_uniform(
+            &queue,
+            bytemuck::bytes_of(&camera.to_gpu_new()),
+            "Camera",
+        );
 
         Self {
             texture_format: texture_format,
@@ -189,7 +192,7 @@ impl Render {
         self.shared_uniform.update(
             &self.queue,
             self.camera_index,
-            bytemuck::bytes_of(&self.camera.to_gpu()),
+            bytemuck::bytes_of(&self.camera.to_gpu_new()),
         );
     }
 }

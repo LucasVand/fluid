@@ -107,10 +107,11 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                     let lookup = spatial_lookup[i];
                     let particle_idx = lookup.y;
                     let particle = particles[particle_idx];
-                    let dst_sq = dot(particle.predicted_position, pos);
+
+                    let diff = particle.predicted_position - pos;
+                    let dst_sq = dot(diff, diff);
 
                     if dst_sq < smoothing_radius_sq {
-                        let diff = particle.predicted_position - pos;
                         let dst = distance(diff, diff);
 
                         let influence = smoothing_kernel(params.smoothing_radius, dst);

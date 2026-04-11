@@ -99,7 +99,7 @@ impl AxisLines {
 
         let line_pipeline = RenderPipelineBuilder::new(device)
             .shader(
-                include_str!("../../renderer/shaders/axis_lines.wgsl"),
+                include_str!("./shaders/axis_lines.wgsl"),
                 "Axis Lines Shader",
             )
             .primitive(PrimitiveTopology::LineList)

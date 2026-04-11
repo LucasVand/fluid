@@ -77,10 +77,7 @@ impl Wireframe {
             .build("Wireframe Bindgroup");
 
         let line_pipeline = RenderPipelineBuilder::new(device)
-            .shader(
-                include_str!("../../renderer/shaders/wireframe.wgsl"),
-                "Wireframe Shader",
-            )
+            .shader(include_str!("./shaders/wireframe.wgsl"), "Wireframe Shader")
             .primitive(PrimitiveTopology::LineList)
             .bind_group_layout(&[&bgl])
             .vertex_entry("vs_main")

@@ -1,7 +1,7 @@
 use eframe::wgpu::{
     BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
-    BufferBindingType, Device, ShaderStages, TextureSampleType, TextureViewDimension,
-    SamplerBindingType, StorageTextureAccess, TextureFormat,
+    BufferBindingType, Device, SamplerBindingType, ShaderStages, StorageTextureAccess,
+    TextureFormat, TextureSampleType, TextureViewDimension,
 };
 
 pub struct BindGroupLayoutBuilder<'a> {
@@ -109,9 +109,28 @@ impl<'a> BindGroupLayoutBuilder<'a> {
             count: None,
         })
     }
+    pub fn storage_texture_read(
+        self,
+        binding: u32,
+        visibility: ShaderStages,
+        format: TextureFormat,
+    ) -> Self {
+        self.push(BindGroupLayoutEntry {
+            binding,
+            visibility,
+            ty: BindingType::StorageTexture {
+                access: StorageTextureAccess::ReadOnly,
+                format,
+                view_dimension: TextureViewDimension::D3,
+            },
+            count: None,
+        })
+    }
     pub fn build(self, label: &'a str) -> BindGroupLayout {
         if self.entries.is_empty() {
-            panic!("BindGroupLayoutBuilder: no entries added. Call .uniform(), .uniform_dyn(), .buffer(), .texture(), .sampler(), .sampler_comparison(), or .storage_texture() to add bind group layout entries before build()");
+            panic!(
+                "BindGroupLayoutBuilder: no entries added. Call .uniform(), .uniform_dyn(), .buffer(), .texture(), .sampler(), .sampler_comparison(), or .storage_texture() to add bind group layout entries before build()"
+            );
         }
 
         self.device
