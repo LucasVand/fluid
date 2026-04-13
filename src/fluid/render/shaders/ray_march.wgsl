@@ -99,7 +99,7 @@ fn fs_main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
 
     let scattering = params.scattering;
 
-    let sun_strength = 1.557;
+    let sun_strength = 0.557;
     let sun_dir = vec3(sun_strength);
 
     const STEP: f32 = 2;
@@ -166,7 +166,7 @@ fn calculate_along_ray(ray_origin: vec3<f32>, ray_dir: vec3<f32>, step: f32) -> 
 
     for (var i: f32 = 0; i < factored; i += step) {
         let sample_pos = start_pos + ray_dir * i;
-        let sample = sample_density_map(sample_pos);
+        let sample = sample_density_map(sample_pos) * params.density_multiplier;
         density += sample;
     }
 
@@ -189,4 +189,26 @@ fn sample_density_map(pos: vec3<f32>) -> f32 {
 
     let texel = textureLoad(density_map, uvw);
     return texel.r;
+}
+
+fn refract(dir: vec3<f32>, normal: vec3<f32>, iorA: f32, iorB: f32) -> vec3<f32> {
+    let relative_ior = iorA / iorB;
+    let cos_angle_in = -dot(dir, normal);
+    let sin_sqrt_angle_of_ref = relative_ior * relative_ior * (1 - cos_angle_in * cos_angle_in);
+    let res = dir * relative_ior + normal * (relative_ior * cos_angle_in - sqrt(1 - sin_sqrt_angle_of_ref));
+
+    return res;
+}
+fn relectance(dir: vec3<f32>, normal: vec3<f32>, iorA: f32, iorB: f32) -> f32 {
+    let refact_ratio = iorA / iorB;
+    let cos_angle_in = -dot(dir, normal);
+    let sin_sqrt_refract = refact_ratio * refact_ratio * (1 - cos_angle_in * cos_angle_in);
+
+    if sin_sqrt_refract >= 1 { return 1.0; }
+
+    let cos_refact = sqrt(1 - sin_sqrt_refract);
+    let sqrt_ray_perp = (iorA * cos_angle_in - iorB * cos_refact) / (iorA * cos_angle_in + iorB * cos_refact);
+    let sqrt_ray_par = (iorB * cos_angle_in - iorA * cos_refact) / (iorB * cos_angle_in + iorA * cos_refact);
+
+    return (sqrt_ray_perp * sqrt_ray_perp + sqrt_ray_par * sqrt_ray_par) / 2;
 }
